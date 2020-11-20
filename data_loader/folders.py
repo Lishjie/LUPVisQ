@@ -3,32 +3,35 @@
 # @Author   : lishijie
 from numpy.core.fromnumeric import var
 import torch.utils.data as data
-from PIL import Image
+from PIL import Image, ImageFile
+import numpy as np
 import os
 import os.path
 import scipy.io
 from openpyxl import load_workbook
+import csv
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class AVAFolder(data.Dataset):
 
     def __init__(self, root, index, transform, patch_num, model_type):
         imgname = []
-        avg_all = []
-        var_all = []
-        ava_f = open(os.path.join(root, 'AVA_scores.txt'), 'r')
-        lines = ava_f.readlines()
-        for line in lines:
-            item = line.strip().strip('\n').split(' ')
-            imgname.append(item[1])
-            avg_all.append(item[2])
-            var_all.append(item[3])
+        label_all = []
+        # ava_f = open(os.path.join(root, 'AVA_scores.txt'), 'r')
+        ava_file = os.path.join(root, 'AVA_train_scores.csv')
+        with open(ava_file) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                imgname.append(row['img_name'])
+                label = row['avg_score'] if model_type == 'objective' else row['var_score']
+                label = np.array(float(label)).astype(np.float32)
+                label_all.append(label)
         
         sample = []
         for i, item in enumerate(index):
             for aug in range(patch_num):
-                sample.append((os.path.join(root, 'images', 'images', imgname[item]+'.jpg'),
-                               avg_all[item] if model_type == 'objectivity' else var_all[item]))
+                sample.append((os.path.join(root, 'images', 'images', imgname[item]+'.jpg'), label_all[item]))
         
         self.samples = sample
         self.transform = transform

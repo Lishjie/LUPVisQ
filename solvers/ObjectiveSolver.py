@@ -41,17 +41,15 @@ class ObjectiveSolver(object):
                 ]
         self.solver = torch.optim.Adam(paras, weight_decay=self.weight_decay)
 
-        train_loader = data_loader.DataLoader(config.dataset, path, train_idx, config.patch_size, config.train_patch_num, batch_size=config.batch_size, num_workers=config.num_workers, istrain=True)
-        test_loader = data_loader.DataLoader(config.dataset, path, test_idx, config.patch_size, config.test_patch_num, istrain=False)
+        train_loader = data_loader.DataLoader(config.dataset, path, train_idx, config.patch_size, config.train_patch_num, batch_size=config.batch_size, num_workers=config.num_workers, istrain=True, model_type=config.model_type)
+        test_loader = data_loader.DataLoader(config.dataset, path, test_idx, config.patch_size, config.test_patch_num, istrain=False, model_type=config.model_type)
         self.train_data = train_loader.get_data()
         self.test_data = test_loader.get_data()
         self.logger_info('train with device {} and pytorch {}'.format(0, torch.__version__))
     
     def train(self):
         """Training"""
-        best_srcc = 0.0  # Spearman’s rank order correlation coefficient
-        best_plcc = 0.0  # Pearson’s linear correlation coefficient
-        best_loss = 0.0  # Mean Squared Error loss
+        best_mseLoss = 100.0  # Mean Squared Error loss
         for t in range(self.epochs):
             epoch_loss = []
             pred_scores = []
@@ -74,43 +72,44 @@ class ObjectiveSolver(object):
 
                 loss = self.mse_loss(pred.squeeze(), label.float().detach())
                 batch_time = time.time() - bacth_start
-                self.logger_info(
-                    '[{}/{}], batch num: {}, loss: {:.6f}, time: {:.2f}'.format(
-                        t+1, self.epochs, batch_num, loss, batch_time))
+                if batch_num % 10 == 0:
+                    self.logger_info(
+                        '[{}/{}], batch num: {}, loss: {:.6f}, time: {:.2f}'.format(
+                            t+1, self.epochs, batch_num, loss, batch_time))
                 epoch_loss.append(loss.item())
                 loss.backward()
                 self.solver.step()
 
-            train_srcc, _ = stats.spearmanr(pred_scores, gt_scores)
-
-            test_srcc, test_plcc = self.test(self.test_data)
-            if test_srcc > best_srcc:
-                best_srcc = test_srcc
-                best_plcc = test_plcc
-                torch.save(self.model_objective.state_dict(), os.path.join(self.save_model_path, 'hyperIQA_{}_best.pth'.format(self.dataset)))
+            test_mseLoss = self.test(self.test_data)
+            if test_mseLoss < best_mseLoss:
+                self.logger_info(
+                    'Reduce MSE from {} to {}'.format(test_mseLoss, best_mseLoss))
+                best_mseLoss = test_mseLoss
+                torch.save(self.model_objective.state_dict(), os.path.join(self.save_model_path, 'objectiveNet_{}_best.pth'.format(self.dataset)))
+                self.logger_info(
+                    'Save model {} in path ')
             epoch_time = time.time() - epoch_start
             self.logger_info(
-                'Epoch: {}, Train_Loss: {}, Train_SRCC: {}, Test_SRCC: {}, Test_PLCC: {}, time: {}'.format(
-                    t + 1, sum(epoch_loss) / len(epoch_loss), train_srcc, test_srcc, test_plcc, epoch_time))
+                'Epoch: {}, Train_MSELoss: {}, Test_MSELoss: {}, time: {}'.format(
+                    t + 1, sum(epoch_loss) / len(epoch_loss), test_mseLoss, epoch_time))
             # Update optimizer
             lr = self.lr / pow(10, (t // 6))
             if t > 8:
                 self.lrratio = 1
             paras = [
-                     {'params': self.fc_params, 'lr': self.lr * self.lrratio},
+                     {'params': self.fc_params, 'lr': lr * self.lrratio},
                      {'params': self.model_objective.res.parameters(), 'lr': self.lr},
                     ]
             self.solver = torch.optim.Adam(paras, weight_decay=self.weight_decay)
 
-        print('Best test SRCC %f, PLCC %f' % (best_srcc, best_plcc))
+        print('Best test MSELoss %f' % (best_mseLoss))
 
-        return best_srcc, best_plcc
+        return best_mseLoss
     
     def test(self, data):
         """Testing"""
         self.model_objective.train(False)
-        pred_scores = []
-        gt_scores = []
+        mse_scores = []
 
         for img, label in data:
             # Data
@@ -119,16 +118,11 @@ class ObjectiveSolver(object):
 
             pred = self.model_objective(img)
 
-            pred_scores.append(float(pred.item()))
-            gt_scores = gt_scores + label.cpu().tolist()
+            mse = self.mse_loss(pred.squeeze(), label.float().detach())
+            mse_scores.append(mse.item())
         
-        pred_scores = np.mean(np.reshape(np.array(pred_scores), (-1, self.test_patch_num)), axis=1)
-        gt_scores = np.mean(np.reshape(np.array(gt_scores), (-1, self.test_patch_num)), axis=1)
-        test_srcc, _ = stats.spearmanr(pred_scores, gt_scores)
-        test_plcc, _ = stats.pearsonr(pred_scores, gt_scores)
-
         self.model_objective.train(True)
-        return test_srcc, test_plcc
+        return sum(mse_scores) / len(mse_scores)
 
     def logger_info(self, s):
         self.logger.info(s)

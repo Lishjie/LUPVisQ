@@ -5,16 +5,17 @@ import torch
 from torch.utils import data
 import torchvision
 from torchvision.transforms.transforms import Resize
-import folders
+from .folders import *
 
-class Dataloader(object):
+class DataLoader(object):
     """Dataset class for Aesthetic Visual Analysis database"""
 
-    def __init__(self, dataset, path, img_indx, patch_size, patch_num, batch_size=1, num_workers=0, istrain=True):
+    def __init__(self, dataset, path, img_indx, patch_size, patch_num, batch_size=1, num_workers=0, istrain=True, model_type='objective'):
 
         self.batch_size = batch_size
         self.istrain = istrain
         self.num_workers = num_workers
+        self.model_type = model_type
 
         if dataset == 'ava':
             if istrain:
@@ -34,8 +35,8 @@ class Dataloader(object):
                                                      std=(0.229, 0.224, 0.225))])
         
         if dataset == 'ava':
-            self.data = folders.AVAFolder(
-                root=path, index=img_indx, transform=transforms, patch_num=patch_num)
+            self.data = AVAFolder(
+                root=path, index=img_indx, transform=transforms, patch_num=patch_num, model_type=self.model_type)
     
     def get_data(self):
         if self.istrain:
