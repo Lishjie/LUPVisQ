@@ -14,11 +14,14 @@ import time
 from utils import setup_logger
 
 class ObjectiveSolver(object):
-    def __init__(self, config, path, train_idx, test_idx):
+    def __init__(self, config, path, train_idx, test_idx, train_test_num):
 
         self.epochs = config.epochs
+        self.train_patch_num = config.train_patch_num
         self.test_patch_num = config.test_patch_num
         self.dataset = config.dataset
+        self.train_index = train_idx
+        self.train_test_num = train_test_num
         self.save_model_path = os.path.join(config.save_model_path, config.dataset)
         if not os.path.exists(self.save_model_path):
             os.makedirs(self.save_model_path)
@@ -74,8 +77,8 @@ class ObjectiveSolver(object):
                 batch_time = time.time() - bacth_start
                 if batch_num % 10 == 0:
                     self.logger_info(
-                        '[{}/{}], batch num: {}, loss: {:.6f}, time: {:.2f}'.format(
-                            t+1, self.epochs, batch_num, loss, batch_time))
+                        '[{}/{}], batch num: [{}/{}], loss: {:.6f}, time: {:.2f}'.format(
+                            t+1, self.epochs, batch_num, len(self.train_index)*self.train_patch_num, loss, batch_time))
                 epoch_loss.append(loss.item())
                 loss.backward()
                 self.solver.step()
@@ -83,11 +86,12 @@ class ObjectiveSolver(object):
             test_mseLoss = self.test(self.test_data)
             if test_mseLoss < best_mseLoss:
                 self.logger_info(
-                    'Reduce MSE from {} to {}'.format(test_mseLoss, best_mseLoss))
+                    'Reduce MSE from {} to {}'.format(best_mseLoss, test_mseLoss))
                 best_mseLoss = test_mseLoss
-                torch.save(self.model_objective.state_dict(), os.path.join(self.save_model_path, 'objectiveNet_{}_best.pth'.format(self.dataset)))
+                trained_model_name = 'objectiveNet_{}_best_{}.pth'.format(self.dataset, self.train_test_num)
+                torch.save(self.model_objective.state_dict(), os.path.join(self.save_model_path, trained_model_name))
                 self.logger_info(
-                    'Save model {} in path ')
+                    'Save model {} in path {}'.format(trained_model_name, self.save_model_path))
             epoch_time = time.time() - epoch_start
             self.logger_info(
                 'Epoch: {}, Train_MSELoss: {}, Test_MSELoss: {}, time: {}'.format(

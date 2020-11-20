@@ -34,7 +34,7 @@ def main(config):
         train_index = sel_num[0:10]
         test_index = sel_num[10:20]
 
-        solver = ObjectiveSolver(config, folder_path[config.dataset], train_index, test_index)
+        solver = ObjectiveSolver(config, folder_path[config.dataset], train_index, test_index, i)
         mseLoss_all[i] = solver.train()
     
     mseLoss_med = np.median(mseLoss_all)
