@@ -22,6 +22,7 @@ class ObjectiveSolver(object):
         self.dataset = config.dataset
         self.train_index = train_idx
         self.train_test_num = train_test_num
+        self.batch_size = config.batch_size
         self.save_model_path = os.path.join(config.save_model_path, config.dataset)
         if not os.path.exists(self.save_model_path):
             os.makedirs(self.save_model_path)
@@ -58,14 +59,13 @@ class ObjectiveSolver(object):
             pred_scores = []
             gt_scores = []
             epoch_start = time.time()
+            bacth_start = time.time()
             batch_num = 0
 
             for img, label in self.train_data:
                 batch_num = batch_num + 1
                 img = torch.tensor(img.cuda())
                 label = torch.tensor(label.cuda())
-                bacth_start = time.time()
-
                 self.solver.zero_grad()
 
                 # Quality prediction
@@ -74,11 +74,12 @@ class ObjectiveSolver(object):
                 gt_scores = gt_scores + label.cpu().tolist()
 
                 loss = self.mse_loss(pred.squeeze(), label.float().detach())
-                batch_time = time.time() - bacth_start
-                if batch_num % 10 == 0:
+                if batch_num % 100 == 0:
+                    batch_time = time.time() - bacth_start
+                    bacth_start = time.time()
                     self.logger_info(
                         '[{}/{}], batch num: [{}/{}], loss: {:.6f}, time: {:.2f}'.format(
-                            t+1, self.epochs, batch_num, len(self.train_index)*self.train_patch_num, loss, batch_time))
+                            t+1, self.epochs, batch_num, len(self.train_index)*self.train_patch_num // self.batch_size, loss, batch_time))
                 epoch_loss.append(loss.item())
                 loss.backward()
                 self.solver.step()

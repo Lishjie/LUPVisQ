@@ -16,8 +16,7 @@ def main(config):
     }
 
     img_num = {
-        # 'ava': list(range(0, 204423)),
-        'ava': list(range(0, 20)),
+        'ava': list(range(0, 204423))
     }
 
     sel_num = img_num[config.dataset]
@@ -29,10 +28,8 @@ def main(config):
         print('Round %d' % (i+1))
         # Randomly select 80% images for training and the rest for testing
         random.shuffle(sel_num)
-        # train_index = sel_num[0:163539]
-        # test_index = sel_num[163539:204423]
-        train_index = sel_num[0:10]
-        test_index = sel_num[10:20]
+        train_index = sel_num[0:163539]
+        test_index = sel_num[163539:204423]
 
         solver = ObjectiveSolver(config, folder_path[config.dataset], train_index, test_index, i)
         mseLoss_all[i] = solver.train()
@@ -50,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=5e-4, help='Weight decay')
     parser.add_argument('--lr_ratio', dest='lr_ratio', type=int, default=10, help='Learning rate ratio for hyper network')
     parser.add_argument('--batch_size', dest='batch_size', type=int, default=96, help='Batch size')
-    parser.add_argument('--epochs', dest='epochs', type=int, default=160, help='Epochs for training')
+    parser.add_argument('--epochs', dest='epochs', type=int, default=16, help='Epochs for training')
     parser.add_argument('--patch_size', dest='patch_size', type=int, default=224, help='Crop size for training & testing image patches')
     parser.add_argument('--train_test_num', dest='train_test_num', type=int, default=10, help='Train-test times')
     parser.add_argument('--save_model_path', dest='save_model_path', type=str, default='./result', help='Trained model save path')
