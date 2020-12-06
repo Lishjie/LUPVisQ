@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 # @Time     : 2020/11/18 16:45
 # @Author   : lishijie
+import os
+import time
 from os import stat
 import torch
 from scipy import stats
 from pprint import pformat
 import numpy as np
+
 from models import models
 from data_loader import data_loader
-import os
-import time
-
 from utils import setup_logger
 
 class ObjectiveSolver(object):
-    def __init__(self, config, path, train_idx, test_idx, train_test_num):
+    def __init__(self, config, path, train_test_num=0, train_idx=[], test_idx=[]):
 
         self.epochs = config.epochs
         self.train_patch_num = config.train_patch_num

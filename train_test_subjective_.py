@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-# @Time     : 2020/11/18 16:49
+# @Time     : 2020/12/02 10:48
 # @Author   : lishijie
 import os
 import argparse
 import random
 import numpy as np
-from solvers import ObjectiveSolver
+from solvers import SubjectiveSolver
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -21,7 +21,8 @@ def main(config):
 
     sel_num = img_num[config.dataset]
 
-    mseLoss_all = np.zeros(config.train_test_num, dtype=np.float)
+    srcc_all = np.zeros(config.train_test_num, dtype=np.float)
+    plcc_all = np.zeros(config.train_test_num, dtype=np.float)
 
     print('Training and testing on %s dataset for %d rounds...' % (config.dataset, config.train_test_num))
     for i in range(config.train_test_num):
@@ -31,12 +32,13 @@ def main(config):
         train_index = sel_num[0:163539]
         test_index = sel_num[163539:204423]
 
-        solver = ObjectiveSolver(config, folder_path[config.dataset], train_index, test_index)
-        mseLoss_all[i] = solver.train()
+        solver = SubjectiveSolver(config, folder_path[config.dataset], train_index, test_index)
+        srcc_all[i], plcc_all[i] = solver.train()
     
-    mseLoss_med = np.median(mseLoss_all)
+    srcc_med = np.median(srcc_all)
+    plcc_med = np.median(plcc_all)
 
-    print('Testing median MSE %4.4f' % (mseLoss_med))
+    print('Testing median SRCC %4.4f,\tmedian PLCC %4.4f' % (srcc_med, plcc_med))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-# @Time     : 2020/11/18 16:49
+# @Time     : 2020/12/05 9:30
 # @Author   : lishijie
 import os
 import argparse
-import random
+from random import random
 import numpy as np
-from solvers import ObjectiveSolver
+import random
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+from solvers.SubjectiveSolver import SubjectiveSolver
+
+os.environ['CUDA_VISIBLE_DEVIDES'] = '0'
 
 def main(config):
 
@@ -16,31 +18,38 @@ def main(config):
     }
 
     img_num = {
-        'ava_database': list(range(0, 204423))
+        'ava_database': np.arange(408846)[::2]
     }
 
     sel_num = img_num[config.dataset]
-
-    mseLoss_all = np.zeros(config.train_test_num, dtype=np.float)
+    loss_all = np.zeros(config.train_test_num, dtype=np.float)
 
     print('Training and testing on %s dataset for %d rounds...' % (config.dataset, config.train_test_num))
     for i in range(config.train_test_num):
         print('Round %d' % (i+1))
         # Randomly select 80% images for training and the rest for testing
         random.shuffle(sel_num)
-        train_index = sel_num[0:163539]
-        test_index = sel_num[163539:204423]
+        train_index_ = sel_num[0:163539]
+        train_index = []
+        for index in train_index_:
+            train_index.append(index)
+            train_index.append(index+1)
+        test_index_ = sel_num[163539:204423]
+        test_index = []
+        for index in test_index_:
+            test_index.append(index)
+            test_index.append(index+1)
+        
+        solver = SubjectiveSolver(config, folder_path[config.dataset], train_index, test_index)
+        loss_all[i] = solver.train()
 
-        solver = ObjectiveSolver(config, folder_path[config.dataset], train_index, test_index)
-        mseLoss_all[i] = solver.train()
-    
-    mseLoss_med = np.median(mseLoss_all)
+    loss_med = np.median(loss_all)
 
-    print('Testing median MSE %4.4f' % (mseLoss_med))
+    print('Testing median Margin Ranking loss %4.4f' % (loss_med))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', dest='dataset', type=str, default='ava_database', help='Support datasets: ava')
+    parser.add_argument('--dataset', dest='dataset', type=str, default='ava', help='Support datasets: ava_database')
     parser.add_argument('--train_patch_num', dest='train_patch_num', type=int, default=25, help='Number of sample patches from training image')
     parser.add_argument('--test_patch_num', dest='test_patch_num', type=int, default=25, help='Number of sample patches from testing image')
     parser.add_argument('--lr', dest='lr', type=float, default=2e-5, help='Learning rate')

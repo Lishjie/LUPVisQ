@@ -3,9 +3,9 @@
 # @Author   : lishijie
 import logging
 
-def setup_logger(log_file_path: str = None):
+def setup_logger(log_file_path: str = None, logger_name='Objective'):
     logging._warn_preinit_stderr = 0
-    logger = logging.getLogger('hyperIQA')
+    logger = logging.getLogger(logger_name)
     formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s')
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)

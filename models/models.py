@@ -28,7 +28,7 @@ class Objective(nn.Module):
     
     Note:
         For size match, input args must satisfy: 'target_fc(i)_size * target_fc(i+1)_size' is divisible by 'feature_size ^ 2'.
-    models.HyperNet(16, 112, 224, 112, 56, 28, 14, 7)
+    models.Objective(16, 112, 224, 112, 56, 28, 14, 7)
     """
     def __init__(self, lda_out_channels, target_in_size, target_fc1_size, target_fc2_size, target_fc3_size, target_fc4_size):
         super(Objective, self).__init__()
@@ -79,6 +79,174 @@ class Objective(nn.Module):
         x = self.l4(x).squeeze()
 
         return x
+
+
+class Subjective(nn.Module):
+    """
+    Subjective Siamese Network for learning perceptual rules.
+
+    Args:
+        lda_out_channels: local distortion aware module output size.
+        hyper_in_channels: input feature channels for hyper network.
+        target_in_size: input vector size for target network.
+        target_fc(i)_size: fully connection layer size of target network.
+        feature_size: input feature map width/height for hyper network.
+
+    Note:
+        For size match, input args must satisfy: 'target_fc(i)_size * target_fc(i+1)_size' is divisible by 'feature_size ^ 2'.
+    models.Subjective(16, 112, 224, 112, 56, 28, 14, 7)
+    """
+    def __init__(self, lda_out_channels, hyper_in_channels, target_in_size, target_fc1_size, target_fc2_size, target_fc3_size, target_fc4_size, feature_size):
+        super(Subjective, self).__init__()
+
+        self.hyperInChn = hyper_in_channels
+        self.target_in_size = target_in_size
+        self.f1 = target_fc1_size
+        self.f2 = target_fc2_size
+        self.f3 = target_fc3_size
+        self.f4 = target_fc4_size
+        self.feature_size = feature_size
+
+        # 224, [7x7, 2048]
+        self.res = resnet50_backbone(lda_out_channels, target_in_size, pretrained=True)
+
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # Conv layers for resnet output features
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(2048, 1024, 1, padding=(0, 0)),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(1024, 512, 1, padding=(0, 0)),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512, self.hyperInChn, 1, padding=(0, 0)),
+            nn.ReLU(inplace=True)
+        )
+
+        # Hyper network part, conv for generating target fc weights, fc for generating target fc biases
+        # [7x7x112] -> [7x7x512]
+        self.fc1w_conv = nn.Conv2d(self.hyperInChn, int(self.target_in_size * self.f1 / feature_size ** 2), 3,  padding=(1, 1))
+        self.fc1b_fc = nn.Linear(self.hyperInChn, self.f1)
+
+        # [7x7x112] -> [7x7x128]
+        self.fc2w_conv = nn.Conv2d(self.hyperInChn, int(self.f1 * self.f2 / feature_size ** 2), 3, padding=(1, 1))
+        self.fc2b_fc = nn.Linear(self.hyperInChn, self.f2)
+
+        # [7x7x112] -> [7x7x32]
+        self.fc3w_conv = nn.Conv2d(self.hyperInChn, int(self.f2 * self.f3 / feature_size ** 2), 3, padding=(1, 1))
+        self.fc3b_fc = nn.Linear(self.hyperInChn, self.f3)
+
+        # [7x7x112] -> [7x7x8]
+        self.fc4w_conv = nn.Conv2d(self.hyperInChn, int(self.f3 * self.f4 / feature_size ** 2), 3, padding=(1, 1))
+        self.fc4b_fc = nn.Linear(self.hyperInChn, self.f4)
+
+        self.fc5w_fc = nn.Linear(self.hyperInChn, self.f4)
+        self.fc5b_fc = nn.Linear(self.hyperInChn, 1)
+
+        # initialize
+        for i, m_name in enumerate(self._modules):
+            if i > 2:
+                nn.init.kaiming_normal_(self._modules[m_name].weight.data)
+    
+    def forward(self, img):
+        feature_size = self.feature_size
+
+        res_out = self.res(img)
+
+        # input vector for target net  [batch_size, 224, 1, 1]
+        target_in_vec = res_out['target_in_vec'].view(-1, self.target_in_size, 1, 1)
+
+        # input features for hyper net  [batch_size, 112, 7, 7]
+        hyper_in_feat = self.conv1(res_out['hyper_in_feat']).view(-1, self.hyperInChn, feature_size, feature_size)
+
+        # generating target net weights & biases  [batch_size, 112, 224, 1, 1]
+        target_fc1w = self.fc1w_conv(hyper_in_feat).view(-1, self.f1, self.target_in_size, 1, 1)
+        target_fc1b = self.fc1b_fc(self.pool(hyper_in_feat).squeeze()).view(-1, self.f1)  # [batch_size, 112]
+
+        target_fc2w = self.fc2w_conv(hyper_in_feat).view(-1, self.f2, self.f1, 1, 1)  # [batch_size, 56, 112, 1, 1]
+        target_fc2b = self.fc2b_fc(self.pool(hyper_in_feat).squeeze()).view(-1, self.f2)  # [batch_size, 56]
+
+        target_fc3w = self.fc3w_conv(hyper_in_feat).view(-1, self.f3, self.f2, 1, 1)  # [batch_size, 28, 56, 1, 1]
+        target_fc3b = self.fc3b_fc(self.pool(hyper_in_feat).squeeze()).view(-1, self.f3)  # [batch_size, 28]
+
+        target_fc4w = self.fc4w_conv(hyper_in_feat).view(-1, self.f4, self.f3, 1, 1)  # [batch_size, 14, 28, 1, 1]
+        target_fc4b = self.fc4b_fc(self.pool(hyper_in_feat).squeeze()).view(-1, self.f4)  # [batch_size, 14]
+
+        target_fc5w = self.fc5w_fc(self.pool(hyper_in_feat).squeeze()).view(-1, 1, self.f4, 1, 1)  # [batch_size, 1, 14, 1, 1]
+        target_fc5b = self.fc5b_fc(self.pool(hyper_in_feat).squeeze()).view(-1, 1)  # [batch_size, 1]
+
+        out = {}
+        out['target_in_vec'] = target_in_vec
+        out['target_fc1w'] = target_fc1w
+        out['target_fc1b'] = target_fc1b
+        out['target_fc2w'] = target_fc2w
+        out['target_fc2b'] = target_fc2b
+        out['target_fc3w'] = target_fc3w
+        out['target_fc3b'] = target_fc3b
+        out['target_fc4w'] = target_fc4w
+        out['target_fc4b'] = target_fc4b
+        out['target_fc5w'] = target_fc5w
+        out['target_fc5b'] = target_fc5b
+
+        return out
+
+
+class TargetNet(nn.Module):
+    """
+    Target network for Subjective prediction.
+    """
+    def __init__(self, paras):
+        super(TargetNet, self).__init__()
+        self.l1 = nn.Sequential(  # FC1
+            TargetFC(paras['target_fc1w'], paras['target_fc1b']),
+            nn.Sigmoid(),
+        )
+        self.l2 = nn.Sequential(  # FC2
+            TargetFC(paras['target_fc2w'], paras['target_fc2b']),
+            nn.Sigmoid(),
+        )
+
+        self.l3 = nn.Sequential(  # FC3
+            TargetFC(paras['target_fc3w'], paras['target_fc3b']),
+            nn.Sigmoid(),
+        )
+
+        self.l4 = nn.Sequential(  # FC4
+            TargetFC(paras['target_fc4w'], paras['target_fc4b']),
+            nn.Sigmoid(),
+            TargetFC(paras['target_fc5w'], paras['target_fc5b']),
+        )
+
+    def forward(self, x):
+        q = self.l1(x)
+        # q = F.dropout(q)
+        q = self.l2(q)
+        q = self.l3(q)
+        q = self.l4(q).squeeze()
+        return q
+
+
+class TargetFC(nn.Module):
+    """
+    Fully connection operations for target net
+
+    Note:
+        Weights & biases are different for different images in a batch,
+        thus here we use group convolution for calculating images in a batch with individual weights & biases.
+    """
+    def __init__(self, weight, bias):
+        super(TargetFC, self).__init__()
+        self.weight = weight
+        self.bias = bias
+
+    def forward(self, input_):
+
+        input_re = input_.view(-1, input_.shape[0] * input_.shape[1], input_.shape[2], input_.shape[3])
+        weight_re = self.weight.view(self.weight.shape[0] * self.weight.shape[1], self.weight.shape[2], self.weight.shape[3], self.weight.shape[4])
+        bias_re = self.bias.view(self.bias.shape[0] * self.bias.shape[1])
+        
+        out = F.conv2d(input=input_re, weight=weight_re, bias=bias_re, groups=self.weight.shape[0])
+
+        return out.view(input_.shape[0], self.weight.shape[1], input_.shape[2], input_.shape[3])
 
 
 class Bottleneck(nn.Module):
