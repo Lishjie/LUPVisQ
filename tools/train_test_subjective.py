@@ -6,8 +6,13 @@ import argparse
 from random import random
 import numpy as np
 import random
+import sys
+import pathlib
+__dir__ = pathlib.Path(os.path.abspath(__file__))
+sys.path.append(str(__dir__))
+sys.path.append(str(__dir__.parent.parent))
 
-from solvers.SubjectiveSolver import SubjectiveSolver
+from solvers import SubjectiveSolver
 
 os.environ['CUDA_VISIBLE_DEVIDES'] = '0'
 
