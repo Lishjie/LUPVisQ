@@ -32,7 +32,7 @@ class SubjectiveSolver(object):
         self.model_subjective = models.Subjective(16, 112, 224, 112, 56, 28, 14, 7).cuda()
         self.model_subjective.train(True)
 
-        self.margin_ranking_loss = torch.nn.MarginRankingLoss(margin=0.5).cuda()
+        self.margin_ranking_loss = torch.nn.MarginRankingLoss(margin=0.9).cuda()
 
         backbone_params = list(map(id, self.model_subjective.res.parameters()))
         self.hypernet_params = filter(lambda p: id(p) not in backbone_params, self.model_subjective.parameters())
