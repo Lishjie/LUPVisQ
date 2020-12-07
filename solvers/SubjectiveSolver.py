@@ -32,7 +32,7 @@ class SubjectiveSolver(object):
         self.model_subjective = models.Subjective(16, 112, 224, 112, 56, 28, 14, 7).cuda()
         self.model_subjective.train(True)
 
-        self.margin_ranking_loss = torch.nn.MarginRankingLoss(margin=0.3).cuda()
+        self.margin_ranking_loss = torch.nn.MarginRankingLoss(margin=0.5).cuda()
 
         backbone_params = list(map(id, self.model_subjective.res.parameters()))
         self.hypernet_params = filter(lambda p: id(p) not in backbone_params, self.model_subjective.parameters())
@@ -127,23 +127,24 @@ class SubjectiveSolver(object):
         self.model_subjective.train(False)
         total_loss = []
 
-        for img_main, img_sub, label in data:
-            # Data.
-            img_main = torch.tensor(img_main.cuda())
-            img_sub = torch.tensor(img_sub.cuda())
-            label = torch.tensor(label.cuda())
+        with torch.no_grad():
+            for img_main, img_sub, label in data:
+                # Data.
+                img_main = torch.tensor(img_main.cuda())
+                img_sub = torch.tensor(img_sub.cuda())
+                label = torch.tensor(label.cuda())
 
-            paras_main = self.model_subjective(img_main)
-            paras_sub = self.model_subjective(img_sub)
-            model_target_main = models.TargetNet(paras_main).cuda()
-            model_target_sub = models.TargetNet(paras_sub).cuda()
-            model_target_main.train(False)
-            model_target_sub.train(False)
-            score_main = model_target_main(paras_main['target_in_vec'])
-            score_sub = model_target_sub(paras_sub['target_in_vec'])
+                paras_main = self.model_subjective(img_main)
+                paras_sub = self.model_subjective(img_sub)
+                model_target_main = models.TargetNet(paras_main).cuda()
+                model_target_sub = models.TargetNet(paras_sub).cuda()
+                model_target_main.train(False)
+                model_target_sub.train(False)
+                score_main = model_target_main(paras_main['target_in_vec'])
+                score_sub = model_target_sub(paras_sub['target_in_vec'])
 
-            loss = self.margin_ranking_loss(score_main.squeeze(), score_sub.squeeze(), label.sign())
-            total_loss.append(float(loss.item()))
+                loss = self.margin_ranking_loss(score_main.squeeze(), score_sub.squeeze(), label.float())
+                total_loss.append(float(loss.item()))
         
         self.model_subjective.train(True)
         return sum(total_loss) / len(total_loss)
