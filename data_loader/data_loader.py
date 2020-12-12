@@ -125,7 +125,7 @@ class LUPVisQDataLoader(object):
     def get_data(self):
         if self.istrain:
             dataloader = torch.utils.data.DataLoader(
-                self.data, batch_size=self.batch_size, shuffle=True, num_wokers=self.num_workers)
+                self.data, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         else:
             dataloader = torch.utils.data.DataLoader(
                 self.data, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)

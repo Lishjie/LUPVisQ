@@ -5,6 +5,7 @@ import os
 import torch
 import time
 from pprint import pformat
+import torch.nn.functional as F
 
 from utils import setup_logger
 from models.main_models import models
@@ -59,7 +60,7 @@ class LUPVisQSolver(object):
                 batch_num = batch_num + 1
                 img = torch.tensor(img.cuda())
                 label = torch.tensor(label.cuda())
-                label = torch.softmax(label)
+                label = F.softmax(label, dim=-1)
 
                 self.solver.zero_grad()
 
@@ -69,7 +70,7 @@ class LUPVisQSolver(object):
                     _, score = torch.argmax(output)
                     score_dis[score.tolist()[0]] += 1
                 score_dis_tensor = torch.tensor(score_dis)
-                score_dis_tensor = torch.softmax(score_dis_tensor)
+                score_dis_tensor = F.softmax(score_dis_tensor, dim=-1)
 
                 loss = models.single_emd_loss(label.float(), score_dis_tensor, r=1)
                 if batch_num % 100 == 0:
@@ -116,7 +117,7 @@ class LUPVisQSolver(object):
                 # Data.
                 img = torch.tensor(img.cuda())
                 label = torch.tensor(label.cuda())
-                label = torch.softmax(label)
+                label = F.softmax(label, dim=-1)
 
                 score_dis = [0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
                 for _ in range(self.sample_num):
@@ -124,7 +125,7 @@ class LUPVisQSolver(object):
                     _, score = torch.argmax(output)
                     score_dis[score.tolist()[0]] += 1
                 score_dis_tensor = torch.tensor(score_dis)
-                score_dis_tensor = torch.softmax(score_dis_tensor)
+                score_dis_tensor = F.softmax(score_dis_tensor, dim=-1)
 
                 loss = models.single_emd_loss(label.float(), score_dis_tensor, r=1)
                 total_loss.append(float(loss.item()))

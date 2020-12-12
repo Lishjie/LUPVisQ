@@ -15,8 +15,8 @@ model_urls = {
     'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
     'resnet151': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-    'objectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
-    'subjectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
+    'objectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
+    'subjectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
 }
 
 
@@ -113,7 +113,7 @@ class SubjectiveNet(nn.Module):
         self.fc1w_conv = nn.Conv2d(self.hyperInChn, int(self.target_in_size * self.f1 / feature_size ** 2), 3, padding=(1, 1))
         self.fc1b_fc = nn.Linear(self.hyperInChn, self.f1)
 
-        self.fc2w_fc_ = nn.Linear(self.hyperInChn, self.f1)
+        self.fc2w_fc_ = nn.Linear(self.hyperInChn, self.f2)
         self.fc2b_fc_ = nn.Linear(self.hyperInChn, self.f2)
 
         # initialize
@@ -159,7 +159,10 @@ class TargetNet(nn.Module):
             TargetFC(paras['target_fc1w'], paras['target_fc1b']),
             nn.Sigmoid(),
         )
-        self.l2 = TargetFC(paras['target_fc5w'], paras['target_fc5b'])
+        self.l2 =  nn.Sequential(
+            TargetFC(paras['target_fc2w_'], paras['target_fc2b_']),
+            nn.Sigmoid()
+        )
     
     def forward(self, x):
         q = self.l1(x)

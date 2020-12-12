@@ -52,15 +52,13 @@ class LUPVisQNet(nn.Module):
         
         # Mulitilayer perceptron
         self.mlp = nn.Sequential(
-            nn.Linear(self.fc_in_size, self.fc_in_size / 2),
+            nn.Linear(self.fc_in_size, int(self.fc_in_size / 2)),
             nn.ReLU(),
-            nn.Linear(self.fc_in_size / 2, self.fc_in_size / 4),
+            nn.Linear(int(self.fc_in_size / 2), int(self.fc_in_size / 4)),
             nn.ReLU(),
-            nn.Linear(self.fc_in_size / 4, class_num),
+            nn.Linear(int(self.fc_in_size / 4), class_num),
             nn.Sigmoid()
         )
-
-        self.softmax = nn.Softmax()
 
         # initialize
         for m_name in self._modules:
@@ -83,7 +81,7 @@ class LUPVisQNet(nn.Module):
         hi = hi_o + hi_s
         hi = nn.Sigmoid(hi)
         logits = self.mlp(hi)
-        logits_softmax = self.softmax(logits)
+        logits_softmax = F.softmax(logits, dim=-1)
         return logits_softmax
 
 
@@ -138,13 +136,13 @@ class SubjectiveDecisionNet(nn.Module):
 
         # Attention Layer
         self.attention = nn.Sequential(
-            nn.Linear(att_in_size, att_in_size / 2),  # 480, 240
+            nn.Linear(att_in_size, int(att_in_size / 2)),  # 480, 240
             nn.ReLU(),
-            nn.Linear(att_in_size / 2, att_in_size / 4),  # 240, 120
+            nn.Linear(int(att_in_size / 2), int(att_in_size / 4)),  # 240, 120
             nn.ReLU(),
-            nn.Linear(att_in_size / 4, att_in_size / 8),  # 120, 60
+            nn.Linear(int(att_in_size / 4), int(att_in_size / 8)),  # 120, 60
             nn.ReLU(),
-            nn.Linear(att_in_size / 8, att_out_size),  # 60, 3
+            nn.Linear(int(att_in_size / 8), att_out_size),  # 60, 3
             nn.Sigmoid(),
         )
 
@@ -216,13 +214,13 @@ class AuxiliaryNet(nn.Module):
 
         # Fully Connected Layer
         self.fc = nn.Sequential(
-            nn.Linear(aux_in_size, aux_in_size / 2),  # 480, 240
+            nn.Linear(aux_in_size, int(aux_in_size / 2)),  # 480, 240
             nn.ReLU(),
-            nn.Linear(aux_in_size / 2, aux_in_size / 4),  # 240, 120
+            nn.Linear(int(aux_in_size / 2), int(aux_in_size / 4)),  # 240, 120
             nn.ReLU(),
-            nn.Linear(aux_in_size / 4, aux_in_size / 8),  # 120, 60
+            nn.Linear(int(aux_in_size / 4), int(aux_in_size / 8)),  # 120, 60
             nn.ReLU(),
-            nn.Linear(aux_in_size / 8, aux_out_size),  # 60, 3
+            nn.Linear(int(aux_in_size / 8), aux_out_size),  # 60, 3
             nn.Sigmoid(),
         )
 

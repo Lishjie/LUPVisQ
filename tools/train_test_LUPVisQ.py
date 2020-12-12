@@ -18,7 +18,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 def main(config):
     
     folder_path = {
-        'ava_database': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/',
+        'ava_database': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/',
     }
 
     img_num = {

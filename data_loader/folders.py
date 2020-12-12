@@ -128,7 +128,7 @@ class LUPVisQNetDataset(data.Dataset):
     def ava_database(self, root):
         imgname = []
         label_all = []
-        ava_file = os.path.join(root, 'AVA_trian_scores.csv')
+        ava_file = os.path.join(root, 'AVA_train_scores.csv')
 
         with open(ava_file) as f:
             reader = csv.DictReader(f)
