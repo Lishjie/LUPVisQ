@@ -12,7 +12,7 @@ __dir__ = pathlib.Path(os.path.abspath(__file__))
 sys.path.append(str(__dir__))
 sys.path.append(str(__dir__.parent.parent))
 
-from models.backbones import models
+from models.backbones import models as models_
 
 
 class LUPVisQNet(nn.Module):
@@ -27,7 +27,7 @@ class LUPVisQNet(nn.Module):
         channel_num: Multi-dimensional aesthetic channel number
 
     Example:
-        LUPVisQNet(80, 80, 80, 160, 10)
+        LUPVisQNet(80, 80, 80, 10)
     """
     def __init__(self, obj_out_size, sbj_out_size, sdb_out_size, class_num, channel_num=3, tau=1, istrain=True):
         super(LUPVisQNet, self).__init__()
@@ -41,10 +41,10 @@ class LUPVisQNet(nn.Module):
         self.istrain = istrain
 
         # ObjectiveNet
-        self.objectiveNet = models.objectiveNet_backbone()
+        self.objectiveNet = models_.objectiveNet_backbone()
 
         # SubjectiveNet
-        self.subjectiveNet = models.subjectiveNet_backbone()
+        self.subjectiveNet = models_.subjectiveNet_backbone()
 
         # Subjective Decision Block
         self.subjectiveDecisionNet = SubjectiveDecisionNet(sbj_out_size, (obj_out_size+sbj_out_size)*3, (obj_out_size+sbj_out_size)*3,
@@ -73,7 +73,7 @@ class LUPVisQNet(nn.Module):
         hi_o = self.objectiveNet(img)
         # subjective backbone
         params_sub = self.subjectiveNet(img)
-        targetNet = models.TargetNet(params_sub)
+        targetNet = models_.TargetNet(params_sub)
         for param in targetNet.parameters():
             param.requires_grad = False
         hi_s = targetNet(params_sub['target_in_vec'])
@@ -247,7 +247,7 @@ class AuxiliaryNet(nn.Module):
         
         return gt.squeeze()  # dim: (batch_size, 3)
 
-def single_emd_loss(p, q, r=2):
+def single_emd_loss(p, q, r=1):
     """
     Earth Mover's Distance of one sample
 

@@ -49,7 +49,7 @@ class ObjectiveNet(nn.Module):
             nn.ReLU(True),
         )
         self.l2_ = nn.Sequential(  # different from the pre-train network parameters
-            nn.Linear(self.l1, self.fc2),
+            nn.Linear(self.fc1, self.fc2),
             nn.ReLU(True),
         )
 
@@ -385,9 +385,9 @@ def objectiveNet_backbone(lda_out_channels=16, linear_in_size=224, linear_fc1_si
     """ Construct a Objective Net """
     model = ObjectiveNet(lda_out_channels, linear_in_size, linear_fc1_size, linear_fc2_size)
     if pretrain:
-        save_model = model_zoo.load_url(model_urls['objectivenet'])
+        save_model = torch.load(model_urls['objectivenet'])
         model_dict = model.state_dict()
-        state_dict = {k: v for k, v in save_model.item() if k in model_dict.keys()}
+        state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
         model_dict.update(state_dict)
         model.load_state_dict(model_dict)
     else:
@@ -398,9 +398,9 @@ def subjectiveNet_backbone(lda_out_channels=16, hyper_in_channels=112, target_in
     """ Construct a Subjective Net """
     model = SubjectiveNet(lda_out_channels, hyper_in_channels, target_in_size, target_fc1_size, target_fc2_size, feature_size)
     if pretrain:
-        save_model = model_zoo.load_url(model_urls['subjectivenet'])
+        save_model = torch.load(model_urls['subjectivenet'])
         model_dict = model.state_dict()
-        state_dict = {k: v for k, v in save_model.item() if k in model_dict.keys()}
+        state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
         model_dict.update(state_dict)
         model.load_state_dict(model_dict)
     else:

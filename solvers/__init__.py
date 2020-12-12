@@ -3,3 +3,4 @@
 # @Author   : lishijie
 from .ObjectiveSolver import *
 from .SubjectiveSolver import *
+from .LUPVisQSolver import *

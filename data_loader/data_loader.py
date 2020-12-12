@@ -95,7 +95,7 @@ class SubjectiveDataLoader(object):
 class LUPVisQDataLoader(object):
     """Dataste class for LUPVisQNet"""
 
-    def __init__(self, dataset, path, img_index, patch_size, patch_num, batch_size=1, num_workers=0, istrain=True, database_type='ava_database'):
+    def __init__(self, dataset, path, img_index, patch_size, patch_num, batch_size=1, num_workers=0, istrain=True):
 
         self.batch_size = batch_size
         self.istrain = istrain
@@ -120,7 +120,7 @@ class LUPVisQDataLoader(object):
         
         if dataset == 'ava_database':
             self.data = LUPVisQNetDataset(
-                root=path, index=img_index, transform=transforms, patch_num=patch_num, database_type=database_type)
+                root=path, index=img_index, transform=transforms, patch_num=patch_num, database_type=dataset)
         
     def get_data(self):
         if self.istrain:
