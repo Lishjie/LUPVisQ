@@ -9,7 +9,7 @@ from scipy import stats
 from pprint import pformat
 import numpy as np
 
-from models import models
+from models.pretrain import models
 from data_loader import data_loader
 from utils import setup_logger
 

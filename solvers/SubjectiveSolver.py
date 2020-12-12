@@ -5,12 +5,12 @@ import torch
 from scipy import stats
 from pprint import pformat
 import numpy as np
-import models
-import data_loader
 import os
 import time
 
+from models.pretrain import models
 from utils import setup_logger
+import data_loader
 
 class SubjectiveSolver(object):
     """Solver for training and testing SubjectiveNet"""

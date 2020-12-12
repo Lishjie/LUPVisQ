@@ -5,6 +5,12 @@ import os
 import argparse
 import random
 import numpy as np
+import sys
+import pathlib
+__dir__ = pathlib.Path(os.path.abspath(__file__))
+sys.path.append(str(__dir__))
+sys.path.append(str(__dir__.parent.parent))
+
 from solvers import ObjectiveSolver
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
