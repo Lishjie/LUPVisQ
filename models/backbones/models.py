@@ -15,8 +15,8 @@ model_urls = {
     'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
     'resnet151': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-    'objectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
-    'subjectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
+    'objectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
+    'subjectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
 }
 
 
@@ -113,8 +113,8 @@ class SubjectiveNet(nn.Module):
         self.fc1w_conv = nn.Conv2d(self.hyperInChn, int(self.target_in_size * self.f1 / feature_size ** 2), 3, padding=(1, 1))
         self.fc1b_fc = nn.Linear(self.hyperInChn, self.f1)
 
-        self.fc2w_fc_ = nn.Linear(self.hyperInChn, self.f2)
-        self.fc2b_fc_ = nn.Linear(self.hyperInChn, self.f2)
+        # self.fc2w_fc_ = nn.Linear(self.hyperInChn, self.f2)
+        # self.fc2b_fc_ = nn.Linear(self.hyperInChn, self.f2)
 
         # initialize
         for i, m_name in enumerate(self._modules):
@@ -136,15 +136,15 @@ class SubjectiveNet(nn.Module):
         target_fc1w = self.fc1w_conv(hyper_in_feat).view(-1, self.f1, self.target_in_size, 1, 1)  # |batch_size, 112, 224, 1, 1|
         target_fc1b = self.fc1b_fc(self.pool(hyper_in_feat).squeeze()).view(-1, self.f1)  # |batch_size, 112|
 
-        target_fc2w_ = self.fc2w_fc_(self.pool(hyper_in_feat).squeeze()).view(-1, self.f2, self.f1, 1, 1)  # |batch_size, 80, 112, 1, 1|
-        target_fc2b_ = self.fc2b_fc_(self.pool(hyper_in_feat).squeeze()).view(-1, self.f2)  # |batch_size, 80|
+        # target_fc2w_ = self.fc2w_fc_(self.pool(hyper_in_feat).squeeze()).view(-1, self.f2, self.f1, 1, 1)  # |batch_size, 80, 112, 1, 1|
+        # target_fc2b_ = self.fc2b_fc_(self.pool(hyper_in_feat).squeeze()).view(-1, self.f2)  # |batch_size, 80|
 
         out = {}
         out['target_in_vec'] = target_in_vec
         out['target_fc1w'] = target_fc1w
         out['target_fc1b'] = target_fc1b
-        out['target_fc2w_'] = target_fc2w_
-        out['target_fc2b_'] = target_fc2b_
+        # out['target_fc2w_'] = target_fc2w_
+        # out['target_fc2b_'] = target_fc2b_
 
         return out
 
@@ -159,14 +159,15 @@ class TargetNet(nn.Module):
             TargetFC(paras['target_fc1w'], paras['target_fc1b']),
             nn.Sigmoid(),
         )
-        self.l2 =  nn.Sequential(
-            TargetFC(paras['target_fc2w_'], paras['target_fc2b_']),
-            nn.Sigmoid()
-        )
+        # self.l2 =  nn.Sequential(
+        #     TargetFC(paras['target_fc2w_'], paras['target_fc2b_']),
+        #     nn.Sigmoid()
+        # )
     
     def forward(self, x):
-        q = self.l1(x)
-        hi_s = self.l2(q).squeeze()
+        # q = self.l1(x)
+        # hi_s = self.l2(q).squeeze()
+        hi_s = self.l1(x).squeeze()
         return hi_s
 
 
@@ -184,8 +185,8 @@ class TargetFC(nn.Module):
         self.bias = bias
 
     def forward(self, input_):
-
-        input_re = input_.view(-1, input_.shape[0] * input_.shape[1], input_.shape[2] * input_.shape[3])
+    
+        input_re = input_.view(-1, input_.shape[0] * input_.shape[1], input_.shape[2], input_.shape[3])
         weight_re = self.weight.view(self.weight.shape[0] * self.weight.shape[1], self.weight.shape[2], self.weight.shape[3], self.weight.shape[4])
         bias_re = self.bias.view(self.bias.shape[0] * self.bias.shape[1])
 

@@ -27,12 +27,13 @@ class LUPVisQNet(nn.Module):
         channel_num: Multi-dimensional aesthetic channel number
 
     Example:
-        LUPVisQNet(80, 80, 80, 10)
+        LUPVisQNet(80, 112, 80, 80, 10)
     """
-    def __init__(self, obj_out_size, sbj_out_size, sdb_out_size, class_num, channel_num=3, tau=1, istrain=True):
+    def __init__(self, obj_out_size, sbj_adp_in_size, sbj_out_size, sdb_out_size, class_num, channel_num=3, tau=1, istrain=True):
         super(LUPVisQNet, self).__init__()
 
         self.obj_out_size = obj_out_size
+        self.sbj_adp_in_size = sbj_adp_in_size
         self.sbj_out_size = sbj_out_size
         self.sdb_out_size = sdb_out_size
         self.fc_in_size = obj_out_size + sdb_out_size
@@ -45,6 +46,7 @@ class LUPVisQNet(nn.Module):
 
         # SubjectiveNet
         self.subjectiveNet = models_.subjectiveNet_backbone()
+        self.sub_dim_adapt = nn.Linear(sbj_adp_in_size, sbj_out_size)
 
         # Subjective Decision Block
         self.subjectiveDecisionNet = SubjectiveDecisionNet(sbj_out_size, (obj_out_size+sbj_out_size)*3, (obj_out_size+sbj_out_size)*3,
@@ -59,6 +61,8 @@ class LUPVisQNet(nn.Module):
             nn.Linear(int(self.fc_in_size / 4), class_num),
             nn.Sigmoid()
         )
+
+        self.sigmoid = nn.Sigmoid()
 
         # initialize
         for m_name in self._modules:
@@ -75,11 +79,12 @@ class LUPVisQNet(nn.Module):
         for param in targetNet.parameters():
             param.requires_grad = False
         hi_s = targetNet(params_sub['target_in_vec'])
+        hi_s = self.sub_dim_adapt(hi_s)
         # Subjective Decision Block
         hi_s = self.subjectiveDecisionNet(hi_o, hi_s)
         # Mulitilayer perceptron
-        hi = hi_o + hi_s
-        hi = nn.Sigmoid(hi)
+        hi = torch.cat((hi_o, hi_s), 1)
+        hi = self.sigmoid(hi)
         logits = self.mlp(hi)
         logits_softmax = F.softmax(logits, dim=-1)
         return logits_softmax
@@ -146,6 +151,8 @@ class SubjectiveDecisionNet(nn.Module):
             nn.Sigmoid(),
         )
 
+        self.sigmoid = nn.Sigmoid()
+
         # initialize
         for m_name in self._modules:
             if isinstance(m_name, nn.Linear):
@@ -153,7 +160,7 @@ class SubjectiveDecisionNet(nn.Module):
                 nn.init.normal_(m_name.bias, 0)
 
     
-    def selfAttention(query, key, value):
+    def selfAttention(self, query, key, value):
         """Compute 'Scaled Dot Product Attention'"""
         d_k = query.size(-1)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
@@ -168,13 +175,13 @@ class SubjectiveDecisionNet(nn.Module):
     def forward(self, h_io, h_is):
         # multi-dimensional aesthetic channel
         linear_h1 = self.linear1(h_is)  # channel1 dim: (batch_size, 80)
-        h1_attention = self.selfAttention(linear_h1, linear_h1, linear_h1)
+        h1_attention, atten_1 = self.selfAttention(linear_h1, linear_h1, linear_h1)
         linear_h1 = torch.cat((h_io, linear_h1), 1)  # dim: (batch_size, 160)
         linear_h2 = self.linear2(h_is)  # channel2
-        h2_attention = self.selfAttention(linear_h2, linear_h2, linear_h2)
+        h2_attention, atten_2 = self.selfAttention(linear_h2, linear_h2, linear_h2)
         linear_h2 = torch.cat((h_io, linear_h2), 1)
         linear_h3 = self.linear3(h_is)  # channel3
-        h3_attention = self.selfAttention(linear_h3, linear_h3, linear_h3)
+        h3_attention, atten_3 = self.selfAttention(linear_h3, linear_h3, linear_h3)
         linear_h3 = torch.cat((h_io, linear_h3), 1)
         linear_h = torch.cat((linear_h1, linear_h2, linear_h3), 1)  # dim: (batch_size, 480)
 
@@ -184,13 +191,13 @@ class SubjectiveDecisionNet(nn.Module):
         # attention
         e_t = self.attention(linear_h)
         alpha = self.masked_softmax(e_t, gt)  # dim: (batch_size, 3)
-        h1_attention = h1_attention * alpha[:, 0]
-        h2_attention = h2_attention * alpha[:, 1]
-        h3_attention = h3_attention * alpha[:, 2]
+        h1_attention = h1_attention * alpha[:, 0].view(-1, 1)
+        h2_attention = h2_attention * alpha[:, 1].view(-1, 1)
+        h3_attention = h3_attention * alpha[:, 2].view(-1, 1)
 
         # add
         hi_s = h1_attention + h2_attention + h3_attention
-        hi_s = nn.Sigmoid(hi_s)
+        hi_s = self.sigmoid(hi_s)
         return hi_s  # dim: (batch_size, 80)
 
 

@@ -31,7 +31,7 @@ class LUPVisQSolver(object):
         self.logger = setup_logger(os.path.join(self.save_model_path, 'train_LUPVisQ.log'), 'LUPVisQ')
         self.logger_info(pformat(config))
 
-        self.model_LUPVisQ = models.LUPVisQNet(80, 80, 80, 10, channel_num=3, tau=1, istrain=True).cuda()
+        self.model_LUPVisQ = models.LUPVisQNet(80, 112, 80, 80, 10, channel_num=3, tau=1, istrain=True).cuda()
         self.model_LUPVisQ.train(True)
 
         self.lr = config.lr
@@ -67,7 +67,7 @@ class LUPVisQSolver(object):
                 score_dis = [0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
                 for _ in range(self.sample_num):
                     output = self.model_LUPVisQ(img)
-                    _, score = torch.argmax(output)
+                    _, score = torch.argmax(output, dim=1)
                     score_dis[score.tolist()[0]] += 1
                 score_dis_tensor = torch.tensor(score_dis)
                 score_dis_tensor = F.softmax(score_dis_tensor, dim=-1)
@@ -122,7 +122,7 @@ class LUPVisQSolver(object):
                 score_dis = [0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
                 for _ in range(self.sample_num):
                     output = self.model_LUPVisQ(img)
-                    _, score = torch.argmax(output)
+                    _, score = torch.argmax(output, dim=1)
                     score_dis[score.tolist()[0]] += 1
                 score_dis_tensor = torch.tensor(score_dis)
                 score_dis_tensor = F.softmax(score_dis_tensor, dim=-1)
