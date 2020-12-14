@@ -263,9 +263,10 @@ def single_emd_loss(p, q, r=1):
     """
     assert p.shape == q.shape, "Length of the two distribution must be the same"
     length = p.shape[0]
+    print(p, q)
     emd_loss = 0.0
     for i in range(1, length + 1):
-        emd_loss += torch.abs(sum(p[:i], q[:i])) ** r
+        emd_loss += torch.abs(sum(p[:i] - q[:i])) ** r
     return (emd_loss / length) ** (1. / r)
 
 def emd_loss(p, q, r=1):

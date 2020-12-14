@@ -18,7 +18,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 def main(config):
     
     folder_path = {
-        'ava_database': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/',
+        'ava_database': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/',
     }
 
     img_num = {
@@ -60,6 +60,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=0, help='How many subprocesses are used to load data')
     parser.add_argument('--model_type', dest='model_type', type=str, default='objective', help='objective | subjective | LUPVisQ')
     parser.add_argument('--sample_num', dest='sample_num', type=int, default=50, help='forward sample times')
+    parser.add_argument('--class_num', dest='class_num', type=int, default=10, help='Number of scoring levels')
+    parser.add_argument('--channel_num', dest='channel_num', type=int, default=3, help='Channel num of Multi-dimensional aesthetic channel')
 
     config = parser.parse_args()
     main(config)

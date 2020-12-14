@@ -15,8 +15,8 @@ model_urls = {
     'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
     'resnet151': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-    'objectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
-    'subjectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
+    'objectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
+    'subjectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
 }
 
 

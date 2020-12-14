@@ -4,6 +4,7 @@
 import os
 import torch
 import time
+import numpy as np
 from pprint import pformat
 import torch.nn.functional as F
 
@@ -25,13 +26,14 @@ class LUPVisQSolver(object):
         self.train_test_num = config.train_test_num
         self.batch_size = config.batch_size
         self.sample_num = config.sample_num
+        self.class_num = config.class_num
         self.save_model_path = os.path.join(config.save_model_path, config.dataset, 'LUPVisQ')
         if not os.path.exists(self.save_model_path):
             os.makedirs(self.save_model_path)
         self.logger = setup_logger(os.path.join(self.save_model_path, 'train_LUPVisQ.log'), 'LUPVisQ')
         self.logger_info(pformat(config))
 
-        self.model_LUPVisQ = models.LUPVisQNet(80, 112, 80, 80, 10, channel_num=3, tau=1, istrain=True).cuda()
+        self.model_LUPVisQ = models.LUPVisQNet(80, 112, 80, 80, class_num=self.class_num, channel_num=config.channel_num, tau=1, istrain=True).cuda()
         self.model_LUPVisQ.train(True)
 
         self.lr = config.lr
@@ -59,20 +61,30 @@ class LUPVisQSolver(object):
             for img, label in self.train_data:
                 batch_num = batch_num + 1
                 img = torch.tensor(img.cuda())
-                label = torch.tensor(label.cuda())
-                label = F.softmax(label, dim=-1)
+                label = torch.tensor(label.cuda(), dtype=torch.float32)
+                label = F.softmax(label, dim=-2)
 
                 self.solver.zero_grad()
 
-                score_dis = [0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
-                for _ in range(self.sample_num):
-                    output = self.model_LUPVisQ(img)
-                    _, score = torch.argmax(output, dim=1)
-                    score_dis[score.tolist()[0]] += 1
-                score_dis_tensor = torch.tensor(score_dis)
-                score_dis_tensor = F.softmax(score_dis_tensor, dim=-1)
+                score_dis = np.zeros([self.batch_size, self.class_num], dtype=np.float)
+                for i in range(self.sample_num):
+                    if i != self.sample_num - 1:
+                        with torch.no_grad():
+                            output = self.model_LUPVisQ(img)
+                            score = torch.argmax(output, dim=1)
+                            score_dis[:, score.tolist()] += 1
+                    else:
+                        output = self.model_LUPVisQ(img)
+                        score = torch.argmax(output, dim=1)
+                        score_dis[:, score.tolist()] += 1
+                score_dis_tensor = torch.tensor(score_dis, dtype=torch.float32)
+                score_dis_tensor = F.softmax(score_dis_tensor, dim=-1).view(-1, self.class_num, 1)
+                # to gpu
+                label = label.cuda()
+                score_dis_tensor = score_dis_tensor.cuda()
 
-                loss = models.single_emd_loss(label.float(), score_dis_tensor, r=1)
+                loss = models.emd_loss(label, score_dis_tensor, r=1)
+                print(loss)
                 if batch_num % 100 == 0:
                     batch_time = time.time() - batch_start
                     batch_start = time.time()
@@ -116,18 +128,22 @@ class LUPVisQSolver(object):
             for img, label in data:
                 # Data.
                 img = torch.tensor(img.cuda())
-                label = torch.tensor(label.cuda())
-                label = F.softmax(label, dim=-1)
+                label = torch.tensor(label.cuda(), dtype=torch.float32)
+                label = F.softmax(label, dim=-2)
 
-                score_dis = [0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+                score_dis = np.zeros([self.batch_size, self.class_num], dtype=np.float)
                 for _ in range(self.sample_num):
                     output = self.model_LUPVisQ(img)
-                    _, score = torch.argmax(output, dim=1)
-                    score_dis[score.tolist()[0]] += 1
-                score_dis_tensor = torch.tensor(score_dis)
-                score_dis_tensor = F.softmax(score_dis_tensor, dim=-1)
+                    score = torch.argmax(output, dim=1)
+                    score_dis[:, score.tolist()] += 1
+                score_dis_tensor = torch.tensor(score_dis, dtype=torch.float32)
+                score_dis_tensor = score_dis_tensor.cuda()
+                score_dis_tensor = F.softmax(score_dis_tensor, dim=-1).view(-1, self.class_num, 1)
+                # to gpu
+                label = label.cuda()
+                score_dis_tensor = score_dis_tensor.cuda()
 
-                loss = models.single_emd_loss(label.float(), score_dis_tensor, r=1)
+                loss = models.emd_loss(label, score_dis_tensor, r=1)
                 total_loss.append(float(loss.item()))
         
         self.model_LUPVisQ.train(True)
