@@ -18,7 +18,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 def main(config):
     
     folder_path = {
-        'ava_database': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/',
+        'ava_database': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/',
     }
 
     img_num = {
@@ -33,7 +33,7 @@ def main(config):
     for i in range(config.train_test_num):
         print('Round %d' % (i+1))
         # Randomly select 80% images for training and the rest for testing
-        random.shuffle(sel_num)
+        # random.shuffle(sel_num)
         train_index = sel_num[0:163539]
         test_index = sel_num[163539:204423]
 

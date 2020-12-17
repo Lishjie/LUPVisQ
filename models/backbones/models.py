@@ -15,8 +15,8 @@ model_urls = {
     'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
     'resnet151': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-    'objectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
-    'subjectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
+    'objectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
+    'subjectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
 }
 
 
@@ -50,7 +50,7 @@ class ObjectiveNet(nn.Module):
         )
         self.l2_ = nn.Sequential(  # different from the pre-train network parameters
             nn.Linear(self.fc1, self.fc2),
-            nn.ReLU(True),
+            nn.Sigmoid(),
         )
 
         # initialize
@@ -407,8 +407,8 @@ def subjectiveNet_backbone(lda_out_channels=16, hyper_in_channels=112, target_in
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
         model_dict.update(state_dict)
         model.load_state_dict(model_dict)
-    else:
-        model.apply(weights_init_xavier)
+    # else:
+    #     model.apply(weights_init_xavier)
     return model
 
 def weights_init_xavier(m):

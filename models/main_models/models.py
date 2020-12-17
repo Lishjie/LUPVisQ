@@ -29,7 +29,7 @@ class LUPVisQNet(nn.Module):
     Example:
         LUPVisQNet(80, 112, 80, 80, 10)
     """
-    def __init__(self, obj_out_size, sbj_adp_in_size, sbj_out_size, sdb_out_size, class_num, channel_num=3, tau=1, istrain=True):
+    def __init__(self, obj_out_size, sbj_adp_in_size, sbj_out_size, sdb_out_size, class_num, channel_num=3, tau=1):
         super(LUPVisQNet, self).__init__()
 
         self.obj_out_size = obj_out_size
@@ -39,18 +39,18 @@ class LUPVisQNet(nn.Module):
         self.fc_in_size = obj_out_size + sdb_out_size
         self.class_num = class_num
         self.tau = tau
-        self.istrain = istrain
+        self.istrain = True
 
         # ObjectiveNet
         self.objectiveNet = models_.objectiveNet_backbone()
 
         # SubjectiveNet
-        self.subjectiveNet = models_.subjectiveNet_backbone()
+        self.subjectiveNet = models_.subjectiveNet_backbone(pretrain=False)
         self.sub_dim_adapt = nn.Linear(sbj_adp_in_size, sbj_out_size)
 
         # Subjective Decision Block
         self.subjectiveDecisionNet = SubjectiveDecisionNet(sbj_out_size, (obj_out_size+sbj_out_size)*3, (obj_out_size+sbj_out_size)*3,
-                                                           channel_num, channel_num, sbj_out_size, tau, istrain)
+                                                           channel_num, channel_num, sbj_out_size, tau)
         
         # Mulitilayer perceptron
         self.mlp = nn.Sequential(
@@ -69,6 +69,10 @@ class LUPVisQNet(nn.Module):
             if isinstance(m_name, nn.Linear):
                 nn.init.normal_(m_name.weight, 0, 0.01)
                 nn.init.normal_(m_name.bias, 0)
+
+    def setIstrain(self, istrain):
+        self.istrain = istrain
+        self.subjectiveDecisionNet.setIstrain(self.istrain)
 
     def forward(self, img):
         # objectiveNet backbone
@@ -106,7 +110,7 @@ class SubjectiveDecisionNet(nn.Module):
     Example:
         SubjectiveDecisionNet(80, 480, 480, 3, 3, 80, True)
     """
-    def __init__(self, sd_in_size, aux_in_size, att_in_size, aux_out_size, att_out_size, sd_out_size, tau=1, istrain=True):
+    def __init__(self, sd_in_size, aux_in_size, att_in_size, aux_out_size, att_out_size, sd_out_size, tau=1):
         super(SubjectiveDecisionNet, self).__init__()
         
         self.sd_in_size = sd_in_size
@@ -115,6 +119,7 @@ class SubjectiveDecisionNet(nn.Module):
         self.aux_out_size = aux_out_size
         self.att_out_size = att_out_size
         self.sd_out_size = sd_out_size
+        self.istrain = True
 
         # Multi-dimensional aesthetic channel
         self.linear1 = nn.Sequential(
@@ -137,7 +142,7 @@ class SubjectiveDecisionNet(nn.Module):
         )
 
         # Fully Connected Layer & Gate Network
-        self.auxiliarynet = AuxiliaryNet(sd_in_size, aux_in_size, aux_out_size, tau, istrain)
+        self.auxiliarynet = AuxiliaryNet(sd_in_size, aux_in_size, aux_out_size, tau)
 
         # Attention Layer
         self.attention = nn.Sequential(
@@ -172,6 +177,10 @@ class SubjectiveDecisionNet(nn.Module):
         logits[mask_bool] = float('-inf')
         return torch.softmax(logits, dim=1)
 
+    def setIstrain(self, istrain):
+        self.istrain = istrain
+        self.auxiliarynet.setIstrain(self.istrain)
+
     def forward(self, h_io, h_is):
         # multi-dimensional aesthetic channel
         linear_h1 = self.linear1(h_is)  # channel1 dim: (batch_size, 80)
@@ -190,7 +199,8 @@ class SubjectiveDecisionNet(nn.Module):
 
         # attention
         e_t = self.attention(linear_h)
-        alpha = self.masked_softmax(e_t, gt)  # dim: (batch_size, 3)
+        # alpha = self.masked_softmax(e_t, gt)  # dim: (batch_size, 3)
+        alpha = torch.softmax(gt.float() * e_t, dim=-1)
         h1_attention = h1_attention * alpha[:, 0].view(-1, 1)
         h2_attention = h2_attention * alpha[:, 1].view(-1, 1)
         h3_attention = h3_attention * alpha[:, 2].view(-1, 1)
@@ -210,14 +220,14 @@ class AuxiliaryNet(nn.Module):
         aux_out_size: output vector size for AuxiliaryNet
         tau: temperature for Gumbel-Softmax
     """
-    def __init__(self, sd_in_size, aux_in_size, aux_out_size, tau=1, istrain=True):
+    def __init__(self, sd_in_size, aux_in_size, aux_out_size, tau=1):
         super(AuxiliaryNet, self).__init__()
 
         self.sd_in_size = sd_in_size
         self.aux_in_size = aux_in_size
         self.aux_out_size = aux_out_size
         self.tau = tau
-        self.istrain = istrain
+        self.istrain = True
 
         # Fully Connected Layer
         self.fc = nn.Sequential(
@@ -237,6 +247,9 @@ class AuxiliaryNet(nn.Module):
                 nn.init.normal_(m_name.weight, 0, 0.01)
                 nn.init.normal_(m_name.bias, 0)
 
+    def setIstrain(self, istrain):
+        self.istrain = istrain
+    
     def forward(self, linear_h):
         pt  = self.fc(linear_h)
         pt = pt.view(pt.size(0), pt.size(1), 1)  # dim: (batch_size, 3, 1)
@@ -263,7 +276,6 @@ def single_emd_loss(p, q, r=1):
     """
     assert p.shape == q.shape, "Length of the two distribution must be the same"
     length = p.shape[0]
-    print(p, q)
     emd_loss = 0.0
     for i in range(1, length + 1):
         emd_loss += torch.abs(sum(p[:i] - q[:i])) ** r

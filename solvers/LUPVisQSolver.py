@@ -33,7 +33,7 @@ class LUPVisQSolver(object):
         self.logger = setup_logger(os.path.join(self.save_model_path, 'train_LUPVisQ.log'), 'LUPVisQ')
         self.logger_info(pformat(config))
 
-        self.model_LUPVisQ = models.LUPVisQNet(80, 112, 80, 80, class_num=self.class_num, channel_num=config.channel_num, tau=1, istrain=True).cuda()
+        self.model_LUPVisQ = models.LUPVisQNet(80, 112, 80, 80, class_num=self.class_num, channel_num=config.channel_num, tau=1).cuda()
         self.model_LUPVisQ.train(True)
 
         self.lr = config.lr
@@ -63,34 +63,35 @@ class LUPVisQSolver(object):
                 img = torch.tensor(img.cuda())
                 label = torch.tensor(label.cuda(), dtype=torch.float32)
                 label = F.softmax(label, dim=-2)
+                self.model_LUPVisQ.setIstrain(True)
 
                 self.solver.zero_grad()
 
-                score_dis = np.zeros([self.batch_size, self.class_num], dtype=np.float)
+                score_dis = np.zeros([label.shape[0], self.class_num], dtype=np.float)
                 for i in range(self.sample_num):
-                    if i != self.sample_num - 1:
-                        with torch.no_grad():
-                            output = self.model_LUPVisQ(img)
-                            score = torch.argmax(output, dim=1)
-                            score_dis[:, score.tolist()] += 1
-                    else:
-                        output = self.model_LUPVisQ(img)
-                        score = torch.argmax(output, dim=1)
-                        score_dis[:, score.tolist()] += 1
+                    # if i != self.sample_num - 1:
+                    #     with torch.no_grad():
+                    #         output = self.model_LUPVisQ(img)
+                    #         score = torch.argmax(output, dim=1)
+                    #         score_dis[:, score.tolist()] += 1
+                    # else:
+                    output = self.model_LUPVisQ(img)
+                    score = torch.argmax(output, dim=1)
+                    score_dis[:, score.tolist()] += 1
                 score_dis_tensor = torch.tensor(score_dis, dtype=torch.float32)
                 score_dis_tensor = F.softmax(score_dis_tensor, dim=-1).view(-1, self.class_num, 1)
                 # to gpu
                 label = label.cuda()
                 score_dis_tensor = score_dis_tensor.cuda()
+                score_dis_tensor.requires_grad_(True)
 
                 loss = models.emd_loss(label, score_dis_tensor, r=1)
-                print(loss)
-                if batch_num % 100 == 0:
+                if batch_num % 10 == 0:
                     batch_time = time.time() - batch_start
                     batch_start = time.time()
                     self.logger_info(
                         '[{}/{}], batch num: [{}/{}], Earth Mover\'s Distance loss: {:.6f}, time: {:.2f}'.format(
-                            t+1, self.epochs, batch_num, len(self.train_index)//2*self.train_patch_num // self.batch_size, loss, batch_time))
+                            t+1, self.epochs, batch_num, len(self.train_index)//2*self.train_patch_num // self.batch_size, loss.item(), batch_time))
                 epoch_loss.append(loss.item())
                 loss.backward()
                 self.solver.step()
@@ -130,8 +131,9 @@ class LUPVisQSolver(object):
                 img = torch.tensor(img.cuda())
                 label = torch.tensor(label.cuda(), dtype=torch.float32)
                 label = F.softmax(label, dim=-2)
+                self.model_LUPVisQ.setIstrain(False)
 
-                score_dis = np.zeros([self.batch_size, self.class_num], dtype=np.float)
+                score_dis = np.zeros([label.shape[0], self.class_num], dtype=np.float)
                 for _ in range(self.sample_num):
                     output = self.model_LUPVisQ(img)
                     score = torch.argmax(output, dim=1)
@@ -142,6 +144,7 @@ class LUPVisQSolver(object):
                 # to gpu
                 label = label.cuda()
                 score_dis_tensor = score_dis_tensor.cuda()
+                score_dis_tensor.requires_grad_(True)
 
                 loss = models.emd_loss(label, score_dis_tensor, r=1)
                 total_loss.append(float(loss.item()))
