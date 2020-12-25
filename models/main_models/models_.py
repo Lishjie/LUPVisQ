@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# @Time     : 2020/12/23 19:52
+# @Time     : 2020/12/17 17:35
 # @Author   : lishijie
 import os
 import sys
@@ -20,29 +20,33 @@ class LUPVisQNet(nn.Module):
     Learning to Understand the Perceived Visual Quality of Photos
 
     Args:
-        backbone_out_size: output vector size for BackBoneNet
+        obj_out_size: output vector size for ObjectiveNet
+        sbj_out_size: output vector size for SubjectiveNet
         sbj_adp_in_size: input vector size for SubjectiveDecisionNet
         sdb_out_size: output vector size for SubjectiveDecisionNet
         channel_num: Multi-dimensional aesthetic channel number
     """
-    def __init__(self, backbone_out_size, sbj_adp_in_size, sdb_out_size, class_num, backbone_type='objectiveNet_backbone', channel_num=5, tau=1):
+    def __init__(self, obj_out_size, sbj_out_size, sbj_adp_in_size, sdb_out_size, class_num, channel_num=5, tau=1):
         super(LUPVisQNet, self).__init__()
 
-        self.backbone_out_size = backbone_out_size
+        self.obj_out_size = obj_out_size
+        self.sbj_out_size = sbj_out_size
         self.sbj_adp_in_size = sbj_adp_in_size
         self.sdb_out_size = sdb_out_size
         self.class_num = class_num
-        self.backbone_type = backbone_type
         self.channel_num = channel_num
         self.tau = tau
 
-        # Backbone Network
-        self.backboneNet = getattr(models_, self.backbone_type)()
+        # ObjectiveNet
+        self.objectiveNet = models_.objectiveNet_backbone()
+
+        # SubjectiveNet
+        self.subjectiveNet = models_.subjectiveNet_backbone(pretrain=False)
 
         # Subjective Decision Block
         self.subjectiveDecisionNet = SubjectiveDecisionNet(self.sbj_adp_in_size, self.sbj_adp_in_size*self.channel_num,
                                                            self.sbj_adp_in_size*self.channel_num, self.channel_num, self.channel_num, self.channel_num, self.tau)
-        
+
         # Mulitilayer perceptron
         self.mlp = nn.Sequential(
             nn.Linear(self.sdb_out_size, self.class_num),
@@ -59,50 +63,45 @@ class LUPVisQNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
     
-    def forward(self, img, istrain=True):
-        h_i = self.backboneNet(img)
+    def forward(self, img, sample_num=1, istrain=True):
+        h_io = self.objectiveNet(img)
 
-        hidden_h, g_t, score_increase1, score_increase2, \
-                score_default, score_decrease1, score_decrease2 = self.subjectiveDecisionNet(h_i, istrain)  # dim: (batch_size, sdb_out_size)
+        params_sub = self.subjectiveNet(img)
+        targetNet = models_.TargetNet(params_sub)
+        for param in targetNet.parameters():
+            param.requires_grad = False
+        h_is = targetNet(params_sub['target_in_vec'])
 
-        score_logits_ = self.mlp(hidden_h)
-        score_logits = F.softmax(score_logits_, dim=-1)  # dim: (batch_size, class_num)
-        # score_logits_onehot = F.one_hot(torch.argmax(score_logits, dim=-1), num_classes=self.class_num).float()
+        out = self.subjectiveDecisionNet(h_io, h_is, sample_num, istrain)  # dim: (batch_size, sdb_out_size) or (batch, sample_num, sdb_out_size)
+        
+        score_list = []
+        if sample_num > 1:
+            for time in range(sample_num):
+                score_logits_ = self.mlp(out['hidden_h'][:, time, :].squeeze())
+                score_logits = F.softmax(score_logits_, dim=-1)  # dim: (batch_size, class_num)
+                score_logits_onehot = F.one_hot(torch.argmax(score_logits, dim=-1), num_classes=self.class_num)
+                score_list.append(torch.flatten(score_logits_onehot))  # [dim: (batch_size, 10)] * 50
+        else:
+            score_logits_ = self.mlp(out['hidden_h'].squeeze())
+            score_logits = F.softmax(score_logits_, dim=-1)  # dim: (batch_size, class_num)
+            score_logits_onehot = F.one_hot(torch.argmax(score_logits, dim=-1), num_class=self.class_num)
+            score_list.append(torch.flatten(score_logits_onehot))
+        score_distribution_ = torch.cat(tuple([x for x in score_list]), 0)
+        score_distribution_ = score_distribution_.view(sample_num, -1)  # dim: (sample_num, -1)
+        score_distribution = torch.sum(score_distribution_, 0)
+        score_distribution = score_distribution.view(h_io.size(0), self.class_num, 1)
+        score_distribution_softmax = F.softmax(score_distribution.float(), dim=-2)
 
-        return score_logits, g_t, score_increase1, score_increase2, score_default, score_decrease1, score_decrease2
-    
-    def sample_forward(self, img, label_, sample_num=50, istrain=True):
-        # initialize tensors
-        scores = torch.zeros(sample_num, label_.size(0), self.class_num)
+        res = {}
+        res['score_distribution'] = score_distribution_softmax
+        res['g_t'] = out['g_t']
+        res['score_increase1'] = out['score_increase1']
+        res['score_increase2'] = out['score_increase2']
+        res['score_objective'] = out['score_objective']
+        res['score_decrease1'] = out['score_decrease1']
+        res['score_decrease2'] = out['score_decrease2']
 
-        # sampling
-        for time in range(sample_num-1):
-            scores[time], _, _, _, _, _, _ = self(img, istrain)
-        scores[sample_num-1], g_t, score_increase1, score_increase2, \
-            score_default, score_decrease1, score_decrease2 = self(img, istrain)
-
-        # distribution
-        score_dis_ = torch.sum(scores, dim=0)
-        score_dis = F.softmax(score_dis_, dim=-1)
-        score_dis = score_dis.view(score_dis.size(0), score_dis.size(1), 1)
-        label = F.softmax(label_, dim=-2)
-
-        # loss
-        score_dic = {}
-        score_dic['g_t'] = g_t
-        score_dic['score_increase1'] = score_increase1
-        score_dic['score_increase2'] = score_increase2
-        score_dic['score_objective'] = score_default
-        score_dic['score_decrease1'] = score_decrease1
-        score_dic['score_decrease2'] = score_decrease2
-        loss_fn = torch.nn.MarginRankingLoss(margin=0.1)
-        rank_label = torch.full([score_increase1.size(0), 1], 1).cuda()
-
-        # to gpu
-        score_dis = score_dis.cuda()
-        label = label.cuda()
-
-        return LUPVisQ_loss(label.float().detach(), score_dis, loss_fn, score_dic, rank_label, sample_num=sample_num)
+        return res
 
 
 class SubjectiveDecisionNet(nn.Module):
@@ -117,7 +116,7 @@ class SubjectiveDecisionNet(nn.Module):
         att_out_size: output vector size for attention layer
         tau: temperature for Gumbel-Softmax
     """
-    def __init__(self, sd_in_size, aux_in_size, att_in_size, aux_out_size, att_out_size, channel_num=5, tau=1):
+    def __init__(self, sd_in_size, aux_in_size, att_in_size, aux_out_size, att_out_size, channel_num, tau=1):
         super(SubjectiveDecisionNet, self).__init__()
 
         self.sd_in_size = sd_in_size
@@ -164,37 +163,74 @@ class SubjectiveDecisionNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-    
-    def forward(self, h_i, istrain=True):
+
+    def forward(self, h_io, h_is, sample_num=1, istrain=True):
         # multi-dimensional aesthetic channel
+        h_i = torch.add(h_io, h_is)
+
         hidden_increase1 = self.linear_increase1(h_i)  # dim: (batch_size, sd_in_size)
         hidden_increase2 = self.linear_increase2(h_i)
         hidden_descrese1 = self.linear_decrease1(h_i)
         hidden_descrese2 = self.linear_decrease2(h_i)
-        linear_h = torch.cat((hidden_increase1, hidden_increase2, h_i, hidden_descrese1, hidden_descrese2), 1)
-
-        # Gate
-        g_t = self.auxiliarynet(linear_h, istrain)  # dim: (batch_size, 5)
-        alpha = self.attention(linear_h, g_t, istrain)  # dim: (batch_size, 5)
-
-        # attention
-        increase1_chn = torch.mul(hidden_increase1, alpha[:, 0].view(hidden_increase1.size(0), 1))
-        increase2_chn = torch.mul(hidden_increase2, alpha[:, 1].view(hidden_increase2.size(0), 1))
-        default_chn = torch.mul(h_i, alpha[:, 2].view(h_i.size(0), 1))
-        decrease1_chn = torch.mul(hidden_descrese1, alpha[:, 3].view(hidden_descrese1.size(0), 1))
-        decrease2_chn = torch.mul(hidden_descrese2, alpha[:, 4].view(hidden_descrese2.size(0), 1))
-        hidden_h = torch.add(
-                      torch.add(
-                        torch.add(
-                          torch.add(increase1_chn, increase2_chn), default_chn), decrease1_chn), decrease2_chn)
+        linear_h = torch.cat((hidden_increase1, hidden_increase2, h_io, hidden_descrese1, hidden_descrese2), 1)
         
+        g_t = self.auxiliarynet(linear_h, sample_num, istrain)  # dim: (batch_size, 5, sample_num)
+        alpha = self.attention(linear_h, g_t, sample_num, istrain)  # dim: (batch_size, 5, sample_num)
+        increase1_chn_ = hidden_increase1
+        increase2_chn_ = hidden_increase2
+        objective_chn_ = h_io
+        descrese1_chn_ = hidden_descrese1
+        descrese2_chn_ = hidden_descrese2
+        if sample_num > 1:
+            increase1_chn_ = increase1_chn_.view(hidden_increase1.size(0), 1, hidden_increase1.size(1))
+            increase1_chn = increase1_chn_.repeat(1, sample_num, 1)  # dim: (batch_size, sample_num, sd_in_size)
+            increase2_chn_ = increase2_chn_.view(hidden_increase2.size(0), 1, hidden_increase2.size(1))
+            increase2_chn = increase2_chn_.repeat(1, sample_num, 1)
+            objective_chn_ = objective_chn_.view(h_io.size(0), 1, h_io.size(1))
+            objective_chn = objective_chn_.repeat(1, sample_num, 1)
+            descrese1_chn_ = descrese1_chn_.view(hidden_descrese1.size(0), 1, hidden_descrese1.size(1))
+            descrese1_chn = descrese1_chn_.repeat(1, sample_num, 1)
+            descrese2_chn_ = descrese2_chn_.view(hidden_descrese2.size(0), 1, hidden_descrese2.size(1))
+            descrese2_chn = descrese2_chn_.repeat(1, sample_num, 1)
+
+        alpha_chn1 = alpha[:, 0, :].squeeze()
+        alpha_chn2 = alpha[:, 1, :].squeeze()
+        alpha_chn3 = alpha[:, 2, :].squeeze()
+        alpha_chn4 = alpha[:, 3, :].squeeze()
+        alpha_chn5 = alpha[:, 4, :].squeeze()
+        increase1_chn_mul = torch.mul(increase1_chn_ if sample_num == 1 else increase1_chn, 
+                                alpha_chn1 if sample_num == 1 else alpha_chn1.view(alpha_chn1.size(0), 
+                                alpha_chn1.size(1), 1))
+        increase2_chn_mul = torch.mul(increase2_chn_ if sample_num == 1 else increase2_chn,
+                                alpha_chn2 if sample_num == 1 else alpha_chn2.view(alpha_chn2.size(0), 
+                                alpha_chn2.size(1), 1))
+        objective_chn_mul = torch.mul(objective_chn_ if sample_num == 1 else objective_chn, 
+                                alpha_chn3 if sample_num == 1 else alpha_chn3.view(alpha_chn3.size(0), 
+                                alpha_chn3.size(1), 1))
+        descrese1_chn_mul = torch.mul(descrese1_chn_ if sample_num == 1 else descrese1_chn, 
+                                alpha_chn4 if sample_num == 1 else alpha_chn4.view(alpha_chn4.size(0), 
+                                alpha_chn4.size(1), 1))
+        descrese2_chn_mul = torch.mul(descrese2_chn_ if sample_num == 1 else descrese2_chn, 
+                                alpha_chn5 if sample_num == 1 else alpha_chn5.view(alpha_chn5.size(0), 
+                                alpha_chn5.size(1), 1))
+        hidden_h = torch.add(torch.add(torch.add(torch.add(increase1_chn_mul, increase2_chn_mul), objective_chn_mul), descrese1_chn_mul), descrese2_chn_mul)
+
         score_increase1 = self.rankingNet(hidden_increase1)
         score_increase2 = self.rankingNet(hidden_increase2)
-        score_default = self.rankingNet(h_i)
+        score_objective = self.rankingNet(h_io)
         score_decrease1 = self.rankingNet(hidden_descrese1)
         score_decrease2 = self.rankingNet(hidden_descrese2)
 
-        return hidden_h, g_t, score_increase1, score_increase2, score_default, score_decrease1, score_decrease2
+        out = {}
+        out['hidden_h'] = hidden_h
+        out['g_t'] = g_t
+        out['score_increase1'] = score_increase1
+        out['score_increase2'] = score_increase2
+        out['score_objective'] = score_objective
+        out['score_decrease1'] = score_decrease1
+        out['score_decrease2'] = score_decrease2
+
+        return out
 
 
 class AuxiliaryNet(nn.Module):
@@ -236,20 +272,31 @@ class AuxiliaryNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
     
-    def forward(self, linear_h, istrain=True):
+    def forward(self, linear_h, sample_num=1, istrain=True):
         p_t_ = self.fc(linear_h)
         p_t_ = p_t_.view(p_t_.size(0), p_t_.size(1), 1)  # dim: (batch_size, 5, 1)
 
         if istrain:
-            p_t = p_t_.repeat(1, 1, 2)                   # dim: (batch_size, 5, 2)
+            p_t = p_t_.repeat(1, 1, 2)                # dim: (batch_size, 5, 2)
             p_t[:, :, 0] = 1 - p_t[:, :, 0]
             g_hat = F.gumbel_softmax(p_t, self.tau, hard=False)
-            g_t = g_hat[:, :, 1]
+            g_t_ = g_hat[:, :, 1]
+            if sample_num > 1:
+                g_t_ = g_t_.unsqueeze(-1)
+                g_t = g_t_.repeat(1, 1, sample_num)   # dim: (batch_size, 5, sample_num)
+                for time in range(1, sample_num):
+                    g_hat = F.gumbel_softmax(p_t, self.tau, hard=False)
+                    g_t[:, :, time] = g_hat[:, :, 1]
         else:
             m = torch.distributions.bernoulli.Bernoulli(p_t_)
-            g_t = m.sample()
+            g_t_ = m.sample()
+            if sample_num > 1:
+                g_t = g_t_.repeat(1, 1, sample_num)
+                for time in range(1, sample_num):
+                    temp_t = m.sample()
+                    g_t[:, :, time] = temp_t[:, :, 0]
         
-        return g_t.squeeze()                             # dim: (batch_size, 5)
+        return g_t if sample_num > 1 else g_t_  # dim: (batch_size, 5, sample_num)
 
 
 class GatedAttentionNet(nn.Module):
@@ -282,28 +329,28 @@ class GatedAttentionNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-    
-    # Use during train
-    def gate_softmax(self, logits, gate):
-        logits_exp = torch.mul(logits.exp(), gate)
-        partition = logits_exp.sum(dim=1, keepdim=True)
-        return torch.div(logits_exp, partition)
 
-    # Use during test
     def masked_softmax(self, logits, mask):
-        mask_bool = mask <= 0
-        logits[mask_bool] = float('-inf')
+        maks_bool = mask <= 0
+        logits[maks_bool] = float('-inf')
         return torch.softmax(logits, dim=-1)
 
-    def forward(self, linear_h, g_t, istrain=True):
-        e_t = self.fc(linear_h)  # dim: (batch_size, 5)
+    def forward(self, linear_h, g_t, sample_num=1, istrain=True):
+        e_t_ = self.fc(linear_h)  # dim: (batch_size, 5)
 
         if istrain:
-            alpha = self.gate_softmax(e_t, g_t)
+            e_t_ = e_t_.view(e_t_.size(0), e_t_.size(1), 1)
+            if sample_num > 1:
+                e_t = e_t_.repeat(1, 1, sample_num)
+            alpha_ = torch.mul(e_t if sample_num > 1 else e_t_, g_t)  # dim: (batch_size, 5, 50)
+            alpha = torch.softmax(alpha_, dim=1)
         else:
-            alpha = self.masked_softmax(e_t, g_t)
+            e_t_ = e_t_.view(e_t_.size(0), e_t_.size(1), 1)
+            if sample_num > 1:
+                e_t = e_t_.repeat(1, 1, sample_num)
+            alpha = self.masked_softmax(e_t if sample_num > 1 else e_t_, g_t)
         
-        return alpha.squeeze()  # dim: (batch_size, 5)
+        return alpha
 
 
 class RankingNet(nn.Module):
@@ -355,7 +402,6 @@ def single_emd_loss(p, q, r=1):
         emd_loss += torch.abs(sum(p[:i] - q[:i])) ** r
     return (emd_loss / length) ** (1. / r)
 
-
 def emd_loss(p, q, r=1):
     """
     Earth Mover's Distance on a batch
@@ -372,8 +418,7 @@ def emd_loss(p, q, r=1):
         loss_vector.append(single_emd_loss(p[i], q[i], r=r))
     return sum(loss_vector) / mini_batch_size
 
-
-def LUPVisQ_loss(p, q, loss_fn, score_dic, rank_label, r=1, scale_loss2=0.01, lambda_=1e-3, sample_num=50):
+def LUPVisQ_loss(p, q, loss_fn, score_dic, rank_label, r=1, sample_num=50, scale_loss2=0.01, lambda_=1e-3):
     emd_loss_ = emd_loss(p, q, r)
     ranking_loss = loss_fn(score_dic['score_increase1'], score_dic['score_increase2'], rank_label) + loss_fn(score_dic['score_increase2'], score_dic['score_objective'], rank_label) \
                    + loss_fn(score_dic['score_objective'], score_dic['score_decrease1'], rank_label) + loss_fn(score_dic['score_decrease1'], score_dic['score_decrease2'], rank_label)
@@ -381,5 +426,5 @@ def LUPVisQ_loss(p, q, loss_fn, score_dic, rank_label, r=1, scale_loss2=0.01, la
     T = score_dic['g_t'].size(1) * sample_num
     regular = (lambda_ * torch.sum(score_dic['g_t'])) / T
 
-    return emd_loss_ + (scale_loss2 * ranking_loss) + regular, emd_loss_
+    return emd_loss_ + (scale_loss2 * ranking_loss) + regular
     # return emd_loss_ + (scale_loss2 * ranking_loss)

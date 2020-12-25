@@ -33,9 +33,11 @@ def main(config):
     for i in range(config.train_test_num):
         print('Round %d' % (i+1))
         # Randomly select 80% images for training and the rest for testing
-        # random.shuffle(sel_num)
+        random.shuffle(sel_num)
         train_index = sel_num[0:163539]
         test_index = sel_num[163539:204423]
+        # train_index = sel_num[0:2000]
+        # test_index = sel_num[2000:3000]
 
         solver = LUPVisQSolver(config, folder_path[config.dataset], train_index, test_index)
         edmLoss_all[i] = solver.train()
@@ -52,6 +54,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', dest='lr', type=float, default=2e-5, help='Learning rate')
     parser.add_argument('--weight_decay', dest='weight_decay', type=float, default=5e-4, help='Weight decay')
     parser.add_argument('--lr_ratio', dest='lr_ratio', type=int, default=10, help='Learning rate ratio for hyper network')
+    parser.add_argument('--lr_decay_rate', dest='lr_decay_rate', type=float, default=0.95, help='Learning rate decay rate')
+    parser.add_argument('--lr_decay_freq', dest='lr_decay_freq', type=float, default=10, help="Learning rate decay frequency")
     parser.add_argument('--batch_size', dest='batch_size', type=int, default=96, help='Batch size')
     parser.add_argument('--epochs', dest='epochs', type=int, default=16, help='Epochs for training')
     parser.add_argument('--patch_size', dest='patch_size', type=int, default=224, help='Crop size for training & testing image patches')
@@ -60,8 +64,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=0, help='How many subprocesses are used to load data')
     parser.add_argument('--model_type', dest='model_type', type=str, default='objective', help='objective | subjective | LUPVisQ')
     parser.add_argument('--sample_num', dest='sample_num', type=int, default=50, help='forward sample times')
+    parser.add_argument('--backbone', dest='backbone', type=str, default='objectiveNet_backbone', help='backbone type')
     parser.add_argument('--class_num', dest='class_num', type=int, default=10, help='Number of scoring levels')
-    parser.add_argument('--channel_num', dest='channel_num', type=int, default=3, help='Channel num of Multi-dimensional aesthetic channel')
+    parser.add_argument('--channel_num', dest='channel_num', type=int, default=5, help='Channel num of Multi-dimensional aesthetic channel')
 
     config = parser.parse_args()
     main(config)

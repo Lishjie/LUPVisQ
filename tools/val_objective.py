@@ -8,8 +8,13 @@ import random
 import numpy as np
 from scipy import stats
 import torch
+import sys
+import pathlib
+__dir__ = pathlib.Path(os.path.abspath(__file__))
+sys.path.append(str(__dir__))
+sys.path.append(str(__dir__.parent.parent))
 
-from models import models
+from models.pretrain import models
 from data_loader import data_loader
 from utils import setup_logger
 
@@ -23,6 +28,7 @@ def main(config):
 
     img_num = {
         'ava': list(range(0, 51105))
+        # 'ava': list(range(0, 1000))
     }
 
     sel_num = img_num[config.dataset]
@@ -31,37 +37,42 @@ def main(config):
 
     logger.info('Validation on %s dataset for %d num samples' % (config.dataset, len(sel_num)))
 
-    val_srcc, val_lcc = val(val_data, sel_num)
+    val_srcc, val_lcc, acc = val(val_data, sel_num)
 
-    logger.info('val srcc: {}, val lcc: {}'.format(val_srcc, val_lcc))
+    logger.info('val srcc: {}, val lcc: {}, acc: {}'.format(val_srcc, val_lcc, acc))
 
 def val(val_data, val_idx):
     """Validation"""
     model_objective = models.Objective(16, 224, 112, 56, 28, 14).cuda()
     model_objective.train(False)
-    model_objective.load_state_dict((torch.load('./result/ava/objectiveNet_ava_best_0.pth')))
+    model_objective.load_state_dict((torch.load('./result/ava_database/objective/objectiveNet_ava_best_0.pth')))
     pred_scores = []
     gt_scores = []
+    acc_scores = []
     num = 0
 
-    for img, label in val_data:
-        num = num + 1
-        # Data
-        img = torch.tensor(img.cuda())
-        label = torch.tensor(label.cuda())
+    with torch.no_grad():
+        for img, label in val_data:
+            num = num + 1
+            # Data
+            img = torch.tensor(img.cuda())
+            label = torch.tensor(label.cuda())
 
-        pred = model_objective(img)
+            pred = model_objective(img)
 
-        pred_scores = pred_scores + pred.cpu().tolist()
-        gt_scores = gt_scores + label.cpu().tolist()
-        logger.info('iter num: [{}/{}]'.format(num, len(val_idx)*config.val_patch_num // config.batch_size))
+            pred_scores = pred_scores + pred.tolist()
+            gt_scores = gt_scores + label.tolist()
+            pred_np = np.array([0 if x <= 5.0 else 1 for x in pred.tolist()])
+            gt_np = np.array([0 if x <= 5.0 else 1 for x in label.tolist()])
+            acc_scores.append(sum(pred_np == gt_np) / pred.size(0))
+            logger.info('iter num: [{}/{}]'.format(num, len(val_idx)*config.val_patch_num // config.batch_size))
     
     pred_scores = np.mean(np.reshape(np.array(pred_scores), (-1, config.val_patch_num)), axis=1)
     gt_scores = np.mean(np.reshape(np.array(gt_scores), (-1, config.val_patch_num)), axis=1)
     val_srcc, _ = stats.spearmanr(pred_scores, gt_scores)
     val_lcc, _ = stats.pearsonr(pred_scores, gt_scores)
 
-    return val_srcc, val_lcc
+    return val_srcc, val_lcc, sum(acc_scores) / len(acc_scores)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -81,5 +92,5 @@ if __name__ == '__main__':
     parser.add_argument('--model_type', dest='model_type', type=str, default='objective', help='objective | subjective | LUPVisQ')
 
     config = parser.parse_args()
-    logger = setup_logger(os.path.join(config.save_model_path, config.dataset, 'val.log'))
+    logger = setup_logger('./val.log')
     main(config)
