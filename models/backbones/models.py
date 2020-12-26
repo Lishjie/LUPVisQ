@@ -14,8 +14,8 @@ model_urls = {
     'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
     'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
     'resnet151': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-    'objectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
-    'subjectivenet': '/home/nlp/lsj/image_aesthetic_assessment/Database/ava_dataset/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
+    'objectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/objectiveNet_ava_best_0.pth',
+    'subjectivenet': '/home/nlp/lsj/image_aesthetics_assessment/Database/AVA_dataset/pretrained_model/SubjectiveNet_ava_database_best_10.pth',
 }
 
 
@@ -410,7 +410,7 @@ class ResNetBackbone(nn.Module):
 
         return out
 
-def resnet50_backbone(lda_out_channels, in_chn, pretrained=False, **kwargs):
+def resnet50_backbone(lda_out_channels, in_chn, pretrained=True, **kwargs):
     """Constructs a ResNet-50 model_hyper.
 
     Args:
@@ -427,7 +427,7 @@ def resnet50_backbone(lda_out_channels, in_chn, pretrained=False, **kwargs):
         model.apply(weights_init_xavier)
     return model
 
-def objectiveNet_backbone(lda_out_channels=16, linear_in_size=224, linear_fc1_size=112, linear_fc2_size=56, linear_fc3_size=28, linear_fc4_size=14, pretrain=True):
+def objectiveNet_backbone(lda_out_channels=16, linear_in_size=224, linear_fc1_size=112, linear_fc2_size=56, linear_fc3_size=28, linear_fc4_size=14, pretrain=False):
     """ Construct a Objective Net """
     model = ObjectiveNet(lda_out_channels, linear_in_size, linear_fc1_size, linear_fc2_size, linear_fc3_size, linear_fc4_size)
     if pretrain:
@@ -436,8 +436,8 @@ def objectiveNet_backbone(lda_out_channels=16, linear_in_size=224, linear_fc1_si
         state_dict = {k: v for k, v in save_model.items() if k in model_dict.keys()}
         model_dict.update(state_dict)
         model.load_state_dict(model_dict)
-    else:
-        model.apply(weights_init_xavier)
+    # else:
+    #     model.apply(weights_init_xavier)
     return model
 
 def subjectiveNet_backbone(lda_out_channels=16, hyper_in_channels=112, target_in_size=224, target_fc1_size=112, target_fc2_size=56, target_fc3_size=28, target_fc4_size=14, feature_size=7, pretrain=False):

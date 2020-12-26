@@ -17,7 +17,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class AVAFolder(data.Dataset):
 
-    def __init__(self, root, index, transform, patch_num, model_type):
+    def __init__(self, root, index, transform, patch_num, model_type, istrain=True):
         imgname = []
         label_all = []
         # ava_f = open(os.path.join(root, 'AVA_scores.txt'), 'r')
@@ -33,7 +33,10 @@ class AVAFolder(data.Dataset):
         
         sample = []
         for i, item in enumerate(index):
-            for aug in range(patch_num):
+            if istrain:
+                for aug in range(patch_num):
+                    sample.append((os.path.join(root, 'images', 'images', imgname[item]+'.jpg'), label_all[item]))
+            else:
                 sample.append((os.path.join(root, 'images', 'images', imgname[item]+'.jpg'), label_all[item]))
         
         self.samples = sample
@@ -105,21 +108,21 @@ class SubjectiveNetDataset(data.Dataset):
 class LUPVisQNetDataset(data.Dataset):
 
     def __init__(self, root, index, transform, patch_num, database_type):
-        imgname, label_all_np = getattr(self, database_type)(root)
+        imgname, label_all_np, avg_all, var_all = getattr(self, database_type)(root)
 
         sample = []
         for i, item in enumerate(index):
             for aug in range(patch_num):
-                sample.append((os.path.join(root, 'images', 'images', imgname[item]+'.jpg'), label_all_np[item]))
+                sample.append((os.path.join(root, 'images', 'images', imgname[item]+'.jpg'), label_all_np[item], avg_all[item], var_all[item]))
         
         self.samples = sample
         self.transform = transform
 
     def __getitem__(self, index: int):
-        path, target = self.samples[index]
+        path, target, avg, var = self.samples[index]
         sample = pil_loader(path)
         sample = self.transform(sample)
-        return sample, target
+        return sample, target, avg, var
 
     def __len__(self):
         length = len(self.samples)
@@ -128,6 +131,8 @@ class LUPVisQNetDataset(data.Dataset):
     def ava_database(self, root):
         imgname = []
         label_all = []
+        avg_all = []
+        var_all = []
         ava_file = os.path.join(root, 'AVA_train_scores.csv')
 
         with open(ava_file) as f:
@@ -138,10 +143,13 @@ class LUPVisQNetDataset(data.Dataset):
                 for i in range(1, 11):
                     label.append(row['score{}_num'.format(i)])
                 label_all.append(label)
+                avg_all.append(np.array(float(row['avg_score'])).astype(np.float32))
+                var_all.append(np.array(float(row['var_score']) ** 0.5).astype(np.float32))
         label_all_np = np.array(label_all, dtype=np.float32)
+        label_all_np = label_all_np / np.sum(label_all_np, axis=-1).reshape((label_all_np.shape[0], 1))
         label_all_np = label_all_np.reshape(-1, 10, 1)
 
-        return imgname, label_all_np
+        return imgname, label_all_np, avg_all, var_all
 
 
 def pil_loader(path):
