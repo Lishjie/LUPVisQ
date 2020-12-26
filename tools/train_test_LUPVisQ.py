@@ -34,10 +34,10 @@ def main(config):
         print('Round %d' % (i+1))
         # Randomly select 80% images for training and the rest for testing
         random.shuffle(sel_num)
-        # train_index = sel_num[0:163539]
-        # test_index = sel_num[163539:204423]
-        train_index = sel_num[0:1000]
-        test_index = sel_num[1000:1500]
+        train_index = sel_num[0:163539]
+        test_index = sel_num[163539:204423]
+        # train_index = sel_num[0:1000]
+        # test_index = sel_num[1000:1500]
 
         solver = LUPVisQSolver(config, folder_path[config.dataset], train_index, test_index)
         edmLoss_all[i] = solver.train()

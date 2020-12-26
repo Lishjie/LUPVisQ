@@ -110,7 +110,7 @@ class LUPVisQSolver(object):
                 acc = sum(pred_np == gt_np) / img.size(0)
 
                 # train log
-                if batch_num % 10 == 0:
+                if batch_num % 100 == 0:
                     batch_time = time.time() - batch_start
                     batch_start = time.time()
                     lcc_mean, _ = stats.pearsonr(pred_mean, gt_mean)
@@ -137,8 +137,8 @@ class LUPVisQSolver(object):
                     'Save model {} in path {}'.format(trained_model_name, self.save_model_path))
             epoch_time = time.time() - epoch_start
             self.logger_info(
-                'Epoch: {}, Train Earth Mover\'s Distance Loss: {}, Test Earth Mover\'s Distance Loss: {}, LCC_mean: {:.3f}, SRCC_mean: {:.3f}, LCC_std: {:.3f}, SRCC_std: {:.3f}, time: {}'.format(
-                    t+1, sum(epoch_emd) / len(epoch_emd), test_emd, test_lcc_mean, test_srcc_mean, test_lcc_std, test_srcc_std, epoch_time))
+                'Epoch: {}, Train Earth Mover\'s Distance Loss: {}, Test Earth Mover\'s Distance Loss: {}, LCC_mean: {:.3f}, SRCC_mean: {:.3f}, LCC_std: {:.3f}, SRCC_std: {:.3f}, ACC: {:.3f}, time: {}'.format(
+                    t+1, sum(epoch_emd) / len(epoch_emd), test_emd, test_lcc_mean, test_srcc_mean, test_lcc_std, test_srcc_std, test_acc, epoch_time))
 
             # update optimizer
             lr = self.lr / pow(10, (t // 6))
