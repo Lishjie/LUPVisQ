@@ -327,9 +327,13 @@ class GatedAttentionNet(nn.Module):
 
     # Use during train
     def gate_softmax(self, logits, gate):
+        # gate_ = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0])
+        # gate_ = gate_.unsqueeze(-1).repeat(1, 2)
+        # gate_ = gate_.unsqueeze(0).repeat(2, 1, 1)
         logits_exp = torch.mul(logits.exp(), gate)
         partition = logits_exp.sum(dim=1, keepdim=True)
         return torch.div(logits_exp, partition)
+        # return gate_.cuda()
 
     # Use during test
     def masked_softmax(self, logits, mask):

@@ -39,6 +39,7 @@ class LUPVisQSolver(object):
 
         # model prepare
         self.model_LUPVisQ = models.LUPVisQNet(14, 14, 14, class_num=self.class_num, backbone_type=config.backbone, channel_num=config.channel_num, tau=0.5).cuda()
+        # self.model_LUPVisQ.load_state_dict((torch.load('./result/ava_database/LUPVisQ/LUPVisQNet_ava_database_best_10_0.059.pth')))
         self.model_LUPVisQ.train(True)
 
         # optim prepare
@@ -200,6 +201,7 @@ class LUPVisQSolver(object):
         lcc_std, _ = stats.pearsonr(pred_std, gt_std)
         srcc_std, _ = stats.spearmanr(pred_std, gt_std)
         
+        self.model_LUPVisQ.train(True)
         return sum(total_emd) / len(total_emd), lcc_mean, srcc_mean, lcc_std, srcc_std, sum(acc_scores) / len(acc_scores)
 
     def cal_mean_std(self, score_dis):
