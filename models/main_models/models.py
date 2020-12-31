@@ -8,6 +8,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 import math
+import torchvision.models as torch_models
+
 __dir__ = pathlib.Path(os.path.abspath(__file__))
 sys.path.append(str(__dir__))
 sys.path.append(str(__dir__.parent.parent))

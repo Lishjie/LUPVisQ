@@ -4,6 +4,7 @@
 import torch.nn as nn
 import torch
 import math
+import torchvision.models as torch_models
 import torch.utils.model_zoo as model_zoo
 from torch.nn import functional as F
 from torch.nn import init
@@ -452,6 +453,12 @@ def subjectiveNet_backbone(lda_out_channels=16, hyper_in_channels=112, target_in
     # else:
     #     model.apply(weights_init_xavier)
     return model
+
+def resnet50_torchmodel(pretrained=True, num_classes=512):
+    return torch_models.resnet50(pretrained=pretrained, num_classes=num_classes)
+
+def inceptionv3_torchmodel(pretrained=True, num_classes=512):
+    return torch_models.inception_v3(pretrained=pretrained, num_classes=num_classes)
 
 def weights_init_xavier(m):
     classname = m.__class__.__name__
