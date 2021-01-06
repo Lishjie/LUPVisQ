@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-# @Time     : 2020/11/18 16:38
+# @Time     : 2021/01/02 16:53
 # @Author   : lishijie
-from .pretrain import *
-from .backbones import *
 from .main_models import *

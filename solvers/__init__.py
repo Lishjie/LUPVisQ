@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-# @Time     : 2020/11/18 16:57
+# @Time     : 2021/01/03 21:43
 # @Author   : lishijie
-from .ObjectiveSolver import *
-from .SubjectiveSolver import *
-from .LUPVisQSolver import *
+from .LUPVisQSovler import *
